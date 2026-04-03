@@ -82,6 +82,31 @@ def set_instance(name):
     out = Path("output") / name if name != "default" else Path("output")
     out.mkdir(parents=True, exist_ok=True)
 
+
+def load_config(name):
+    """Load config overrides from configs/{name}.json. Missing keys use defaults."""
+    config_path = Path("configs") / "{}.json".format(name)
+    if not config_path.exists():
+        config_path = Path("configs/default.json")
+    if not config_path.exists():
+        return
+
+    import json as _json
+    with open(config_path) as f:
+        overrides = _json.load(f)
+
+    g = globals()
+    applied = []
+    for key, val in overrides.items():
+        if key.startswith("_"):
+            continue
+        if key in g:
+            g[key] = val
+            applied.append(key)
+
+    if applied:
+        print("Config: {} ({} overrides)".format(config_path, len(applied)))
+
 TRADE_COLS = [
     "timestamp", "window_start", "combo", "direction", "impulse_bps",
     "time_remaining", "best_bid", "best_ask", "mid", "spread",
@@ -1161,6 +1186,8 @@ def main():
     parser.add_argument("--instance", default="default", help="Instance name for multi-run support")
     args = parser.parse_args()
 
+    # Load config FIRST (overrides constants), then set instance (sets paths)
+    load_config(args.instance)
     if args.instance != "default":
         set_instance(args.instance)
         print("Instance: {}".format(args.instance))

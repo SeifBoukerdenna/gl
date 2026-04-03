@@ -1,0 +1,11 @@
+{
+    "_description": "Tight filters — only the best zones from analysis",
+    "MIN_ENTRY_PRICE": 0.30,
+    "MAX_ENTRY_PRICE": 0.55,
+    "DOWN_MIN_ENTRY": 0.30,
+    "MAX_IMPULSE_BP": 15,
+    "DEAD_ZONE_START": 60,
+    "DEAD_ZONE_END": 210,
+    "COOLDOWN_RANGE_BP": 30,
+    "COOLDOWN_DURATION": 300
+}
