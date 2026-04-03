@@ -445,7 +445,7 @@ function renderSession(d) {
         <table><tr><th>Time</th><th>Combo</th><th>Dir</th><th>Entry</th><th>Size</th><th>Impulse</th><th>T-rem</th><th>Result</th><th>PnL</th></tr>
         ${tradeRows}</table>` : '<div class="empty"><div class="empty-icon">⏳</div>Waiting for trades...</div>'}
 
-        ${d.errors ? '<div style="margin-top:16px;font-size:.78em;color:var(--dim)">Errors: '+JSON.stringify(d.errors)+'</div>' : ''}
+        ${d.errors && Object.values(d.errors).some(v=>v>0) ? '<div style="margin-top:16px;font-size:.78em;color:var(--red)">⚠ Errors: '+JSON.stringify(d.errors)+'</div>' : ''}
     `;
 }
 

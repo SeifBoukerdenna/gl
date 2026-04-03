@@ -113,6 +113,7 @@ TRADE_COLS = [
     "time_remaining", "best_bid", "best_ask", "mid", "spread",
     "fill_price", "levels_consumed", "slippage", "fee",
     "effective_entry_taker", "effective_entry_maker", "filled_size",
+    "notional", "total_fee", "total_slippage", "total_cost",
     "btc_price", "delta_bps", "book_source", "book_age_ms",
     "outcome", "pnl_taker", "pnl_maker", "result",
 ]
@@ -549,6 +550,12 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
     if state.window_open and state.window_open > 0:
         delta_bps = ((btc - state.offset) - state.window_open) / state.window_open * 10000
 
+    # Total cost breakdown
+    notional = round(fill_price * filled_size, 2)       # what you pay for the shares
+    total_fee = round(fee * filled_size, 2)              # total fee in dollars
+    total_slip = round(abs(slippage) * filled_size, 2)   # total slippage cost in dollars
+    total_cost = round(notional + total_fee + total_slip, 2)  # everything you spend
+
     trade = {
         "combo": combo.name, "window_start": state.window_start,
         "timestamp": time.time(), "time_remaining": round(time_remaining, 1),
@@ -560,6 +567,8 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
         "effective_entry_taker": round(eff_taker, 4),
         "effective_entry_maker": round(eff_maker, 4),
         "filled_size": round(filled_size, 1),
+        "notional": notional, "total_fee": total_fee,
+        "total_slippage": total_slip, "total_cost": total_cost,
         "btc_price": round(btc, 2), "delta_bps": round(delta_bps, 2),
         "book_source": book.source,
         "book_age_ms": round((time.time() - book.updated_at) * 1000, 0),
@@ -570,12 +579,12 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
     dc = G if direction == "YES" else R
     arrow = "^" if direction == "YES" else "v"
     dl = "BUY UP" if direction == "YES" else "BUY DOWN"
-    print("  {}{} {} [{}]{} @ {}{:.1f}c{} x{:.0f} (${:.0f}) "
-          "| {:+.1f}bp/{}s | T-{:.0f}s | slip {:.1f}c fee {:.1f}c".format(
+    print("  {}{} {} [{}]{} @ {}{:.1f}c{} x{:.0f} | cost ${:.0f} (fill ${:.0f} + fee ${:.1f} + slip ${:.1f}) "
+          "| {:+.1f}bp/{}s | T-{:.0f}s".format(
               dc, arrow, dl, combo.name, RST,
-              BOLD, fill_price * 100, RST, filled_size, filled_size * fill_price,
-              impulse_bps, combo.lookback_s, time_remaining,
-              abs(slippage) * 100, fee * 100))
+              BOLD, fill_price * 100, RST, filled_size,
+              total_cost, notional, total_fee, total_slip,
+              impulse_bps, combo.lookback_s, time_remaining))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -795,6 +804,10 @@ def write_session_stats():
             "impulse_bps": t.get("impulse_bps"), "time_remaining": t.get("time_remaining"),
             "result": t.get("result"), "pnl_taker": t.get("pnl_taker"),
             "timestamp": t.get("timestamp"), "outcome": t.get("outcome"),
+            "window_start": t.get("window_start"),
+            "notional": t.get("notional"), "total_fee": t.get("total_fee"),
+            "total_slippage": t.get("total_slippage"), "total_cost": t.get("total_cost"),
+            "fee": t.get("fee"), "slippage": t.get("slippage"),
         })
 
     # Window history (last 20)
