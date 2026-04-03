@@ -144,16 +144,13 @@ def get_all_sessions():
     raw = ssh_cmd("""
         for svc in $(systemctl list-units 'polymarket-bot@*' --no-pager --no-legend 2>/dev/null | awk '{print $1}'); do
             INST=$(echo $svc | sed 's/polymarket-bot@//;s/\\.service//'); ST=$(systemctl is-active $svc 2>/dev/null)
-            CSV="/opt/polymarket-bot/data/${INST}/trades.csv"; [ ! -f "$CSV" ] && CSV="/opt/polymarket-bot/data/${INST}/paper_trades_v2.csv"
-            [ ! -f "$CSV" ] && CSV="/opt/polymarket-bot/data/paper_trades_v2.csv"
-            N=0; W=0; P=0
-            if [ -f "$CSV" ]; then
-                HEADER=$(head -1 "$CSV"|tr -d ' ')
-                PNLCOL=$(echo "$HEADER"|tr ',' '\n'|grep -n 'pnl_taker'|cut -d: -f1)
-                RESCOL=$(echo "$HEADER"|tr ',' '\n'|grep -n 'result'|cut -d: -f1)
-                N=$(tail -n +2 "$CSV" 2>/dev/null|wc -l|tr -d ' ')
-                [ -n "$RESCOL" ] && W=$(tail -n +2 "$CSV" 2>/dev/null|cut -d, -f$RESCOL|tr -d ' '|grep -c WIN||echo 0)
-                [ -n "$PNLCOL" ] && P=$(tail -n +2 "$CSV" 2>/dev/null|cut -d, -f$PNLCOL|tr -d ' '|awk '{s+=$1}END{printf "%.0f",s}'||echo 0)
+            STATS="/opt/polymarket-bot/data/${INST}/stats.json"
+            if [ -f "$STATS" ]; then
+                N=$(python3 -c "import json;d=json.load(open('$STATS'));print(d.get('trades',0))" 2>/dev/null || echo 0)
+                W=$(python3 -c "import json;d=json.load(open('$STATS'));print(d.get('wins',0))" 2>/dev/null || echo 0)
+                P=$(python3 -c "import json;d=json.load(open('$STATS'));print(int(d.get('pnl_taker',0)))" 2>/dev/null || echo 0)
+            else
+                N=0; W=0; P=0
             fi
             echo "${INST}|${ST}|${N}|${W}|${P}"
         done
@@ -436,13 +433,18 @@ def index():
 
 @app.route("/session/<name>")
 def session_detail(name):
+    # Always pull fresh stats.json from VPS
+    try:
+        local_dir = DATA_DIR / name
+        local_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run([
+            "scp", "-q", "-o", "ConnectTimeout=3",
+            "root@167.172.50.38:/opt/polymarket-bot/data/{}/stats.json".format(name),
+            str(local_dir / "stats.json")
+        ], capture_output=True, timeout=8)
+    except Exception:
+        pass
     d = get_session_data(name)
-    if d.get("trades", 0) == 0:
-        try:
-            subprocess.run(["./scripts/pull-data.sh", name], capture_output=True, timeout=15)
-            d = get_session_data(name)
-        except Exception:
-            pass
 
     combos = sorted(d.get("combos", {}).items(), key=lambda x: x[1].get("pnl_taker", 0), reverse=True)
 
