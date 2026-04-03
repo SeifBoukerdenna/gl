@@ -10,6 +10,7 @@ import csv
 import json
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
 from datetime import datetime
@@ -21,6 +22,68 @@ app.secret_key = "pm-bot-dash"
 
 CONFIGS_DIR = Path("configs")
 DATA_DIR = Path("data")
+
+# ══════════════════════════════════════════════════════════════
+# Background VPS stats cache — scps all stats.json every 3s
+# ══════════════════════════════════════════════════════════════
+_vps_cache = {}  # name -> stats dict
+_vps_cache_lock = threading.Lock()
+_vps_sessions_cache = []
+_vps_sessions_lock = threading.Lock()
+
+
+def _bg_vps_sync():
+    """Background thread: sync stats.json from all VPS sessions every 3s."""
+    while True:
+        try:
+            # Get list of VPS sessions
+            raw = ssh_cmd("""
+                for svc in $(systemctl list-units 'polymarket-bot@*' --no-pager --no-legend 2>/dev/null | awk '{print $1}'); do
+                    INST=$(echo $svc | sed 's/polymarket-bot@//;s/\\.service//')
+                    echo "$INST"
+                done
+            """)
+            vps_names = [n.strip() for n in raw.strip().split("\n") if n.strip()]
+
+            # Batch scp all stats.json in one SSH call
+            if vps_names:
+                stats_raw = ssh_cmd("""
+                    for INST in {}; do
+                        F="/opt/polymarket-bot/data/$INST/stats.json"
+                        if [ -f "$F" ]; then
+                            echo "===INST:$INST==="
+                            cat "$F"
+                        fi
+                    done
+                """.format(" ".join(vps_names)))
+
+                with _vps_cache_lock:
+                    current = None
+                    buf = ""
+                    for line in stats_raw.split("\n"):
+                        if line.startswith("===INST:") and line.endswith("==="):
+                            if current and buf.strip():
+                                try:
+                                    _vps_cache[current] = json.loads(buf)
+                                except Exception:
+                                    pass
+                            current = line[8:-3]
+                            buf = ""
+                        else:
+                            buf += line + "\n"
+                    if current and buf.strip():
+                        try:
+                            _vps_cache[current] = json.loads(buf)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        time.sleep(3)
+
+
+# Start background sync thread
+_bg_thread = threading.Thread(target=_bg_vps_sync, daemon=True)
+_bg_thread.start()
 
 KNOB_DEFS = {
     "BASE_TRADE_DOLLARS": {"default": 100, "desc": "$ per trade", "min": 1, "max": 10000, "step": 1},
@@ -353,12 +416,14 @@ a{color:var(--blue);text-decoration:none}
 .loading{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--dim);gap:10px}
 .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:.7}to{opacity:1}}
+.fade-in{animation:fadeIn .2s ease}
 
 /* Stat boxes */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px}
 .stat-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px}
 .stat-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin-bottom:4px}
-.stat-value{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.stat-value{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;letter-spacing:-.5px;transition:color .3s}
 .stat-sub{font-size:10px;color:var(--dim);margin-top:2px;font-family:'JetBrains Mono',monospace}
 
 /* Session cards */
@@ -376,7 +441,7 @@ a{color:var(--blue);text-decoration:none}
 .sc-where{font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;text-transform:uppercase}
 .sc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .sc-stat-label{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
-.sc-stat-value{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-top:1px}
+.sc-stat-value{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-top:1px;transition:color .3s}
 .sc-bar{height:3px;background:var(--border);border-radius:2px;margin-top:12px;overflow:hidden}
 .sc-bar-fill{height:100%;border-radius:2px;transition:width .5s}
 
@@ -404,7 +469,7 @@ th:first-child{border-radius:8px 0 0 0}th:last-child{border-radius:0 8px 0 0}
 /* Live bar */
 .live-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:16px}
 .live-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--dim)}
-.live-value{font-size:14px;font-weight:600;margin-top:3px;font-family:'JetBrains Mono',monospace}
+.live-value{font-size:14px;font-weight:600;margin-top:3px;font-family:'JetBrains Mono',monospace;transition:color .3s}
 .timer-value{font-size:28px;font-weight:800;color:var(--blue);font-family:'JetBrains Mono',monospace;letter-spacing:-1px}
 .progress{height:4px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
 .progress-fill{height:100%;border-radius:2px;transition:width 1s linear}
@@ -691,13 +756,13 @@ function renderSession(el) {
       </div>
     </div>
     <div class="live-grid">
-      <div style="text-align:center"><div class="live-label">Time Left</div><div class="timer-value">${Math.floor(trem/60)}:${String(trem%60).padStart(2,'0')}</div><div class="progress"><div class="progress-fill" style="width:${pct}%;background:${trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)'}"></div></div></div>
-      <div><div class="live-label">Window</div><div class="live-value">${winRange(ws)}</div></div>
-      <div><div class="live-label">BTC</div><div class="live-value">${btc}</div></div>
-      <div><div class="live-label">Price To Beat</div><div class="live-value">${ptb}</div></div>
-      <div><div class="live-label">YES Book</div><div class="live-value">Bid <span class="g">${bid}</span> / Ask <span class="r">${ask}</span> <span class="d">(${spr})</span></div></div>
-      <div><div class="live-label">NO Book</div><div class="live-value">Bid <span class="g">${noBid}</span> / Ask <span class="r">${noAsk}</span></div></div>
-      <div><div class="live-label">Updated</div><div class="live-value d">${ago(d.updated)}</div></div>
+      <div style="text-align:center"><div class="live-label">Time Left</div><div class="timer-value" id="live-timer" style="color:${trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)'}">${Math.floor(trem/60)}:${String(trem%60).padStart(2,'0')}</div><div class="progress"><div class="progress-fill" id="live-progress" style="width:${pct}%;background:${trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)'};transition:width 1s linear"></div></div></div>
+      <div><div class="live-label">Window</div><div class="live-value" id="live-window">${winRange(ws)}</div></div>
+      <div><div class="live-label">BTC</div><div class="live-value" id="live-btc">${btc}</div></div>
+      <div><div class="live-label">Price To Beat</div><div class="live-value" id="live-ptb">${ptb}</div></div>
+      <div><div class="live-label">YES Book</div><div class="live-value">Bid <span class="g" id="live-bid">${bid}</span> / Ask <span class="r" id="live-ask">${ask}</span> <span class="d">(<span id="live-spr">${spr}</span>)</span></div></div>
+      <div><div class="live-label">NO Book</div><div class="live-value">Bid <span class="g" id="live-nobid">${noBid}</span> / Ask <span class="r" id="live-noask">${noAsk}</span></div></div>
+      <div><div class="live-label">Updated</div><div class="live-value d" id="live-updated">${ago(d.updated)}</div></div>
     </div>
     <div class="stats-grid">
       <div class="stat-box"><div class="stat-label">PnL (Taker)</div><div class="stat-value ${pc(csvPnl)}">${fp(csvPnl)}</div><div class="stat-sub">${fps(avgPnl)} / trade</div></div>
@@ -707,6 +772,7 @@ function renderSession(el) {
     </div>
     ${pills?'<div class="section-header"><div class="section-title">Recent Windows</div></div><div style="margin-bottom:16px">'+pills+'</div>':''}
     ${comboRows?`<div class="card"><div class="card-header"><h3>Combo Performance</h3><span class="d mono" style="font-size:10px">${csvTrades} trades from CSV</span></div><div style="overflow-x:auto"><table><thead><tr><th>Combo</th><th>Trades</th><th>Wins</th><th>Win%</th><th>PnL</th><th>$/Trade</th><th style="width:80px">WR</th></tr></thead><tbody>${comboRows}</tbody></table></div></div>`:''}
+    <div class="card" style="padding:16px;margin-bottom:14px"><div style="height:350px"><canvas id="session-combo-chart"></canvas></div></div>
     <div class="card"><div class="card-header"><h3>Trade Log</h3>
       <div style="display:flex;gap:6px;align-items:center">
         <select class="filter-select" id="sf-combo" onchange="filterST()"><option value="">All Combos</option>${combosInLog.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select>
@@ -720,6 +786,61 @@ function renderSession(el) {
     <div style="margin-top:8px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--dim);font-family:'JetBrains Mono',monospace">
       Tail logs: <code style="background:var(--card2);padding:2px 6px;border-radius:4px;color:var(--blue)">${d.is_local?'tail -f data/'+name+'.log':'pm logs '+name}</code>
     </div>`;
+
+    // Build combo PnL chart
+    buildSessionComboChart(d);
+}
+function buildSessionComboChart(d){
+    destroyCharts();
+    const cumData=d.combo_cum_pnl||{};
+    const totalCum=d.total_cum_pnl||[];
+    const comboNames=Object.keys(cumData).sort((a,b)=>{
+        const pa=cumData[a],pb=cumData[b];
+        return (pb.length?pb[pb.length-1]:0)-(pa.length?pa[pa.length-1]:0);
+    });
+    if(!comboNames.length&&!totalCum.length) return;
+
+    const crosshairPlugin={id:'crosshair-session',afterDraw(chart){if(chart._crosshairX==null)return;const ctx=chart.ctx,y=chart.chartArea;ctx.save();ctx.beginPath();ctx.moveTo(chart._crosshairX,y.top);ctx.lineTo(chart._crosshairX,y.bottom);ctx.lineWidth=1;ctx.strokeStyle='rgba(255,255,255,.15)';ctx.setLineDash([4,4]);ctx.stroke();ctx.restore()},afterEvent(chart,args){const e=args.event;if(e.type==='mousemove'&&chart.chartArea){chart._crosshairX=(e.x>=chart.chartArea.left&&e.x<=chart.chartArea.right)?e.x:null}else if(e.type==='mouseout'){chart._crosshairX=null}chart.draw()}};
+
+    const datasets=[];
+    // Total line (dashed, white)
+    if(totalCum.length){
+        datasets.push({label:'TOTAL ($'+(totalCum[totalCum.length-1]>=0?'+':'')+totalCum[totalCum.length-1]+')',
+            data:totalCum,borderColor:'rgba(255,255,255,.5)',borderWidth:2,borderDash:[6,3],
+            pointRadius:0,pointHoverRadius:4,tension:.15,fill:false});
+    }
+    // Per-combo lines
+    comboNames.forEach((cn,i)=>{
+        const cum=cumData[cn];
+        const final=cum.length?cum[cum.length-1]:0;
+        datasets.push({label:cn+' ($'+(final>=0?'+':'')+final+')',
+            data:cum,borderColor:COLORS[i%COLORS.length],borderWidth:1.5,
+            pointRadius:0,pointHoverRadius:4,tension:.15,fill:false});
+    });
+    const maxLen=Math.max(totalCum.length,...comboNames.map(cn=>cumData[cn].length));
+
+    makeChart('session-combo-chart',{type:'line',
+        data:{labels:Array.from({length:maxLen},(_,i)=>i+1),datasets},
+        options:{responsive:true,maintainAspectRatio:false,
+            interaction:{mode:'index',intersect:false},hover:{mode:'index',intersect:false},
+            plugins:{
+                legend:{position:'bottom',labels:{color:'#d1d5e0',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:6,usePointStyle:true},
+                    onClick(e,item,legend){const ci=legend.chart;const i=item.datasetIndex;ci.isDatasetVisible(i)?ci.hide(i):ci.show(i)}},
+                tooltip:{backgroundColor:'rgba(17,22,34,.95)',titleColor:'#d1d5e0',bodyColor:'#d1d5e0',
+                    borderColor:'#243049',borderWidth:1,bodyFont:{family:'JetBrains Mono',size:10},
+                    cornerRadius:6,displayColors:true,boxWidth:6,boxHeight:6,
+                    mode:'index',intersect:false,itemSort:(a,b)=>b.parsed.y-a.parsed.y,
+                    callbacks:{
+                        title(items){return 'Trade #'+items[0].label},
+                        label(ctx){const v=ctx.parsed.y;return ' '+ctx.dataset.label.split(' (')[0]+': $'+(v>=0?'+':'')+v.toFixed(0)}
+                    }},
+                title:{display:true,text:'Cumulative PnL by Combo (click legend to toggle)',color:'#d1d5e0',font:{size:12}}
+            },
+            scales:{
+                x:{ticks:{color:'#5a6478',font:{size:9},maxTicksLimit:20},grid:{color:'rgba(26,34,54,.5)'}},
+                y:{ticks:{color:'#5a6478',font:{size:10},callback:v=>'$'+v.toLocaleString()},grid:{color:'rgba(26,34,54,.5)'}}
+            }
+        },plugins:[crosshairPlugin]});
 }
 function filterST(){const c=document.getElementById('sf-combo').value,r=document.getElementById('sf-result').value;let n=0;document.querySelectorAll('#st tbody tr').forEach(row=>{const m=(!c||row.dataset.combo===c)&&(!r||row.dataset.result===r);row.style.display=m?'':'none';if(m)n++});document.getElementById('stc').textContent=n+' shown'}
 
@@ -1018,10 +1139,14 @@ async function syncData(){
 }
 async function stopSess(n,w){if(!confirm('Stop '+n+'?'))return;await fetch('/stop/'+w+'/'+n);setTimeout(loadSessions,2000)}
 async function startSess(n,w){await fetch('/start/'+w+'/'+n);setTimeout(loadSessions,2000)}
-async function deleteSess(n){if(!confirm('DELETE session '+n+'? This removes the config.')){return}await fetch('/delete/'+n,{method:'POST'});S.allTrades=null;await loadSessions();navigate('overview')}
+async function deleteSess(n){if(!confirm('DELETE session '+n+'? This removes config and data.')){return}
+    S.sessions=S.sessions.filter(s=>s.name!==n);delete S.sessionData[n];S.allTrades=null;S.analysisData=null;S.chartData=null;
+    navigate('overview');
+    await fetch('/delete/'+n,{method:'POST'});
+    loadSessions()}
 
 // ═══ Refresh Timer ═══
-let refreshInterval=5, refreshCountdown=5, refreshPaused=false, refreshTimer=null;
+let refreshInterval=3, refreshCountdown=3, refreshPaused=false, refreshTimer=null;
 function tickRefresh(){
     if(refreshPaused)return;
     refreshCountdown--;
@@ -1029,8 +1154,45 @@ function tickRefresh(){
     if(refreshCountdown<=0){
         refreshCountdown=refreshInterval;
         loadSessions();
-        if(S.page==='session'&&S.selectedSession) loadSession(S.selectedSession);
+        if(S.page==='session'&&S.selectedSession) refreshSessionLive(S.selectedSession);
     }
+}
+async function refreshSessionLive(name){
+    // Use fast /api/live endpoint (reads cache, no scp, ~1ms)
+    try{
+        const fresh=await api('/api/live/'+name);
+        // Merge live data into cached session data
+        const old=S.sessionData[name]||{};
+        Object.assign(old,{
+            btc_price:fresh.btc_price, window_open:fresh.window_open,
+            book_bid:fresh.book_bid, book_ask:fresh.book_ask, book_spread:fresh.book_spread,
+            current_window:fresh.current_window, window_end:fresh.window_end,
+            window_active:fresh.window_active, updated:fresh.updated,
+            health:fresh.health, errors:fresh.errors,
+            combos:fresh.combos, recent_windows:fresh.recent_windows,
+            trades:fresh.trades, wins:fresh.wins, wr:fresh.wr,
+            windows_settled:fresh.windows_settled,
+        });
+        S.sessionData[name]=old;
+        // Update live values in-place (no DOM rebuild)
+        const u=id=>document.getElementById(id);
+        if(u('live-btc')) u('live-btc').textContent=fresh.btc_price?'$'+Number(fresh.btc_price).toLocaleString('en-US',{minimumFractionDigits:2}):'\u2014';
+        if(u('live-ptb')) u('live-ptb').textContent=fresh.window_open?'$'+Number(fresh.window_open).toLocaleString('en-US',{minimumFractionDigits:2}):'\u2014';
+        if(u('live-bid')) u('live-bid').textContent=fresh.book_bid?(fresh.book_bid*100).toFixed(1)+'\u00a2':'\u2014';
+        if(u('live-ask')) u('live-ask').textContent=fresh.book_ask?(fresh.book_ask*100).toFixed(1)+'\u00a2':'\u2014';
+        if(u('live-spr')) u('live-spr').textContent=fresh.book_spread?(fresh.book_spread*100).toFixed(1)+'\u00a2':'\u2014';
+        if(u('live-nobid')) u('live-nobid').textContent=fresh.book_ask?((1-fresh.book_ask)*100).toFixed(1)+'\u00a2':'\u2014';
+        if(u('live-noask')) u('live-noask').textContent=fresh.book_bid?((1-fresh.book_bid)*100).toFixed(1)+'\u00a2':'\u2014';
+        if(u('live-updated')) u('live-updated').textContent=ago(fresh.updated);
+        if(u('live-window')&&fresh.current_window) u('live-window').textContent=winRange(fresh.current_window);
+        // Check if new trades arrived — if so, do a full reload with CSV data
+        const liveTrades=fresh.trades||0;
+        const csvTrades=old.csv_trades||0;
+        if(liveTrades>csvTrades){
+            // New trades! Full reload to get CSV data
+            loadSession(name);
+        }
+    }catch(e){}
 }
 function togglePause(){
     refreshPaused=!refreshPaused;
@@ -1046,8 +1208,28 @@ function updateRefreshUI(){
     }
 }
 
+// ═══ Smooth Timer — ticks locally every second ═══
+function tickTimer(){
+    const timerEl=document.getElementById('live-timer');
+    const progEl=document.getElementById('live-progress');
+    if(!timerEl||S.page!=='session') return;
+    const d=S.selectedSession?S.sessionData[S.selectedSession]:null;
+    if(!d||!d.window_end) return;
+    const now=Date.now()/1000;
+    const trem=Math.max(0,Math.floor(d.window_end-now));
+    const pct=Math.min(100,((300-trem)/300)*100);
+    timerEl.textContent=Math.floor(trem/60)+':'+String(trem%60).padStart(2,'0');
+    timerEl.style.color=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)';
+    if(progEl){progEl.style.width=pct+'%';progEl.style.background=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)'}
+    // Also update overview card timers
+    document.querySelectorAll('[data-session-pnl]').forEach(el=>{
+        // CSS transition handles smooth number changes
+    });
+}
+
 // ═══ Init ═══
 loadSessions();
+setInterval(tickTimer, 1000);
 refreshTimer=setInterval(tickRefresh, 1000);
 </script>
 </body></html>"""
@@ -1098,6 +1280,40 @@ def api_configs():
         except Exception:
             configs.append({"name": f.stem, "desc": "error"})
     return jsonify(configs)
+
+
+@app.route("/api/live/<name>")
+def api_live(name):
+    """Fast endpoint — reads from cache, no scp. ~1ms response."""
+    # For local sessions, read stats.json directly
+    stats_path = DATA_DIR / name / "stats.json"
+    if stats_path.exists():
+        try:
+            d = json.loads(stats_path.read_text())
+            # Add health
+            errors = d.get("errors", {})
+            updated = d.get("updated")
+            d["health"] = {
+                "running": bool(updated and (time.time() - updated) < 120),
+                "binance_ok": errors.get("binance_ws", 0) == 0,
+                "pm_ok": errors.get("pm_ws", 0) < 10,
+            }
+            return jsonify(d)
+        except Exception:
+            pass
+    # For VPS sessions, read from background cache
+    with _vps_cache_lock:
+        d = _vps_cache.get(name)
+    if d:
+        errors = d.get("errors", {})
+        updated = d.get("updated")
+        d["health"] = {
+            "running": bool(updated and (time.time() - updated) < 120),
+            "binance_ok": errors.get("binance_ws", 0) == 0,
+            "pm_ok": errors.get("pm_ws", 0) < 10,
+        }
+        return jsonify(d)
+    return jsonify({"trades": 0, "wins": 0, "wr": 0, "pnl_taker": 0, "combos": {}, "recent_trades": []})
 
 
 @app.route("/api/session/<name>")
@@ -1172,6 +1388,24 @@ def api_session(name):
         cv["wr"] = round(cv["wins"] / cv["trades"] * 100, 1) if cv["trades"] > 0 else 0
         cv["pnl_taker"] = round(cv["pnl_taker"])
     d["csv_combos"] = csv_combos
+
+    # Cumulative PnL per combo (for chart) — use chronological order
+    settled_chrono = sorted(settled, key=lambda x: float(x.get("timestamp", 0) or 0))
+    combo_cum = {}
+    for t in settled_chrono:
+        c = (t.get("combo") or "?").strip()
+        if c not in combo_cum:
+            combo_cum[c] = {"cum": [], "running": 0.0}
+        combo_cum[c]["running"] += float(t.get("pnl_taker", 0) or 0)
+        combo_cum[c]["cum"].append(round(combo_cum[c]["running"], 1))
+    # Also total cumulative
+    total_cum = []
+    running_total = 0.0
+    for t in settled_chrono:
+        running_total += float(t.get("pnl_taker", 0) or 0)
+        total_cum.append(round(running_total, 1))
+    d["combo_cum_pnl"] = {c: v["cum"] for c, v in combo_cum.items()}
+    d["total_cum_pnl"] = total_cum
 
     # Health check — works for both local and VPS
     health = {"binance_ws": False, "pm_ws": False, "running": False}
@@ -1497,7 +1731,8 @@ def stop_session(where, name):
 
 @app.route("/delete/<name>", methods=["POST"])
 def delete_session(name):
-    """Stop session and remove config."""
+    """Stop session, remove config and data."""
+    import shutil
     # Stop if running
     subprocess.run(["pkill", "-INT", "-f", "paper_trade_v2.py.*--instance {}".format(name)],
                    capture_output=True)
@@ -1506,6 +1741,17 @@ def delete_session(name):
     cfg = Path("configs/{}.json".format(name))
     if cfg.exists():
         cfg.unlink()
+    # Remove local data
+    data_dir = DATA_DIR / name
+    if data_dir.exists():
+        shutil.rmtree(data_dir, ignore_errors=True)
+    # Remove log
+    log = Path("data/{}.log".format(name))
+    if log.exists():
+        log.unlink()
+    # Clear from VPS cache
+    with _vps_cache_lock:
+        _vps_cache.pop(name, None)
     return jsonify({"ok": True})
 
 

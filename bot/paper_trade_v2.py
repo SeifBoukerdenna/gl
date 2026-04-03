@@ -41,8 +41,8 @@ MIN_BOOK_LEVELS = 3
 # Time filters (from 1,274-trade paper data)
 DEAD_ZONE_START = 90      # T-90-210s: 33-58% win, -$12,534 combined PnL
 DEAD_ZONE_END = 210
-WINDOW_BUFFER_START = 10
-WINDOW_BUFFER_END = 10
+WINDOW_BUFFER_START = 3
+WINDOW_BUFFER_END = 5
 
 # Cooldown
 COOLDOWN_RANGE_BP = 50    # only trigger on extreme crashes, not normal vol
