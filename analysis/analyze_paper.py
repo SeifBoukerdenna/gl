@@ -15,7 +15,19 @@ from pathlib import Path
 from datetime import datetime
 
 import os
-DATA_PATH = Path(os.environ.get("ANALYZE_CSV", "data/paper_trades_v2.csv"))
+
+def find_csv():
+    """Find the trades CSV, checking env var, then new paths, then old paths."""
+    env = os.environ.get("ANALYZE_CSV")
+    if env:
+        return Path(env)
+    # New naming: data/{instance}/trades.csv
+    for p in [Path("data/default/trades.csv"), Path("data/paper_trades_v2.csv")]:
+        if p.exists():
+            return p
+    return Path("data/paper_trades_v2.csv")
+
+DATA_PATH = find_csv()
 OUTPUT_DIR = Path("output")
 
 G = "\033[32m"

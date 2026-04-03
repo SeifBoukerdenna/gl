@@ -9,6 +9,7 @@ Usage: caffeinate -i python -u paper_trade_v2.py
 import asyncio
 import csv
 import json
+import os
 import signal
 import time
 from collections import deque
@@ -65,21 +66,21 @@ BINANCE_WS = "wss://stream.binance.com:9443/ws/btcusdt@trade"
 POLYGON_RPC = "https://polygon-mainnet.g.alchemy.com/v2/EcRCiNAXJXzC22dzlU1gc"
 CHAINLINK_BTC_USD = "0xc907E116054Ad103354f2D350FD2514433D57F6f"
 
-# Output — paths set by instance name (default: "default")
+# Output — each instance ALWAYS gets its own directory
 INSTANCE = "default"
-TRADE_CSV = Path("data/paper_trades_v2.csv")
-SKIP_CSV = Path("data/paper_skips_v2.csv")
+TRADE_CSV = Path("data/default/trades.csv")
+SKIP_CSV = Path("data/default/skips.csv")
 
 
 def set_instance(name):
-    """Set instance name and update all file paths."""
+    """Set instance name and update all file paths. Each instance gets its own dir."""
     global INSTANCE, TRADE_CSV, SKIP_CSV
     INSTANCE = name
-    base = Path("data") / name if name != "default" else Path("data")
+    base = Path("data") / name
     base.mkdir(parents=True, exist_ok=True)
-    TRADE_CSV = base / "paper_trades_v2.csv"
-    SKIP_CSV = base / "paper_skips_v2.csv"
-    out = Path("output") / name if name != "default" else Path("output")
+    TRADE_CSV = base / "trades.csv"
+    SKIP_CSV = base / "skips.csv"
+    out = Path("output") / name
     out.mkdir(parents=True, exist_ok=True)
 
 
@@ -720,28 +721,81 @@ def print_rolling_summary():
 
 
 # ══════════════════════════════════════════════════════════════════
-# CSV PERSISTENCE
+# CSV PERSISTENCE — atomic writes with temp file to prevent corruption
 # ══════════════════════════════════════════════════════════════════
+import tempfile
+import shutil
+
+
+def _append_csv(path, fieldnames, rows):
+    """Append rows to CSV atomically. No file locking needed — write to temp then append."""
+    if not rows:
+        return
+    exists = path.exists()
+    # Write to temp file first
+    fd, tmp = tempfile.mkstemp(suffix=".csv", dir=path.parent)
+    try:
+        with open(fd, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            if not exists:
+                w.writeheader()
+            w.writerows(rows)
+        # Append temp content to main file
+        with open(tmp, "r") as src, open(path, "a") as dst:
+            dst.write(src.read())
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
 def flush_csvs():
     if state.trade_csv_buffer:
-        exists = TRADE_CSV.exists()
-        with open(TRADE_CSV, "a", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=TRADE_COLS, extrasaction="ignore")
-            if not exists:
-                w.writeheader()
-            for row in state.trade_csv_buffer:
-                w.writerow(row)
+        _append_csv(TRADE_CSV, TRADE_COLS, state.trade_csv_buffer)
         state.trade_csv_buffer.clear()
-
     if state.skip_buffer:
-        exists = SKIP_CSV.exists()
-        with open(SKIP_CSV, "a", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=SKIP_COLS, extrasaction="ignore")
-            if not exists:
-                w.writeheader()
-            for row in state.skip_buffer:
-                w.writerow(row)
+        _append_csv(SKIP_CSV, SKIP_COLS, state.skip_buffer)
         state.skip_buffer.clear()
+
+    # Also write a live stats JSON for the dashboard to read without parsing CSV
+    write_session_stats()
+
+
+def write_session_stats():
+    """Write a lightweight stats.json for the dashboard. No CSV parsing needed."""
+    import json as _json
+    stats_path = TRADE_CSV.parent / "stats.json"
+    combos = {}
+    for c in state.combos:
+        n = len(c.trades)
+        wins = sum(1 for t in c.trades if t.get("result") == "WIN")
+        combos[c.name] = {
+            "trades": n,
+            "wins": wins,
+            "wr": round(wins / n * 100, 1) if n > 0 else 0,
+            "pnl_taker": round(c.total_pnl_taker, 2),
+            "pnl_maker": round(c.total_pnl_maker, 2),
+            "bankroll": round(c.bankroll, 2),
+        }
+    total_trades = sum(v["trades"] for v in combos.values())
+    total_wins = sum(v["wins"] for v in combos.values())
+    stats = {
+        "instance": INSTANCE,
+        "updated": time.time(),
+        "trades": total_trades,
+        "wins": total_wins,
+        "wr": round(total_wins / total_trades * 100, 1) if total_trades > 0 else 0,
+        "pnl_taker": round(sum(v["pnl_taker"] for v in combos.values()), 2),
+        "pnl_maker": round(sum(v["pnl_maker"] for v in combos.values()), 2),
+        "windows": len(state.completed_windows),
+        "combos": combos,
+    }
+    # Atomic write
+    tmp = str(stats_path) + ".tmp"
+    with open(tmp, "w") as f:
+        _json.dump(stats, f)
+    os.replace(tmp, stats_path)
 
 
 # ══════════════════════════════════════════════════════════════════

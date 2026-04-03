@@ -124,7 +124,34 @@ def get_configs():
 
 
 def get_session_stats(name):
-    csv_path = DATA_DIR / name / "paper_trades_v2.csv" if name != "default" else DATA_DIR / "paper_trades_v2.csv"
+    """Read stats.json (fast, written by bot) or fall back to parsing CSV."""
+    # Try stats.json first — written atomically by the bot, no lock issues
+    stats_path = DATA_DIR / name / "stats.json"
+    if stats_path.exists():
+        try:
+            data = json.loads(stats_path.read_text())
+            combos = {}
+            for cname, c in data.get("combos", {}).items():
+                combos[cname] = {"n": c["trades"], "wins": c["wins"], "wr": c["wr"], "pnl": round(c["pnl_taker"])}
+            return {
+                "trades": data.get("trades", 0),
+                "wins": data.get("wins", 0),
+                "wr": data.get("wr", 0),
+                "pnl": round(data.get("pnl_taker", 0)),
+                "combos": combos,
+                "windows": data.get("windows", 0),
+                "updated": data.get("updated", 0),
+            }
+        except Exception:
+            pass
+
+    # Fallback: parse CSV (slower, for sessions that don't have stats.json yet)
+    csv_path = DATA_DIR / name / "trades.csv"
+    # Also check old file naming
+    if not csv_path.exists():
+        csv_path = DATA_DIR / name / "paper_trades_v2.csv"
+    if not csv_path.exists():
+        csv_path = DATA_DIR / "paper_trades_v2.csv" if name == "default" else csv_path
     if not csv_path.exists():
         return {"trades": 0, "wins": 0, "wr": 0, "pnl": 0, "combos": {}}
 
@@ -559,6 +586,15 @@ EDIT_HTML = """
 {% for msg in get_flashed_messages() %}
 <div class="flash {{ 'flash-warn' if msg.startswith('⚠') else '' }}">{{ msg }}</div>
 {% endfor %}
+{% if not is_new and stats and stats.trades > 0 %}
+<div class="card" style="margin-bottom:20px">
+    <div style="display:flex; gap:24px; flex-wrap:wrap">
+        <div><span style="font-size:1.4em;font-weight:700">{{ stats.trades }}</span><br><span class="dim" style="font-size:0.72em">TRADES</span></div>
+        <div><span style="font-size:1.4em;font-weight:700" class="{{ 'green' if stats.wr >= 60 else 'yellow' if stats.wr >= 50 else 'red' }}">{{ stats.wr }}%</span><br><span class="dim" style="font-size:0.72em">WIN RATE</span></div>
+        <div><span style="font-size:1.4em;font-weight:700" class="{{ 'pnl-positive' if stats.pnl >= 0 else 'pnl-negative' }}">${{ stats.pnl }}</span><br><span class="dim" style="font-size:0.72em">PNL (TAKER)</span></div>
+    </div>
+</div>
+{% endif %}
 <form method="POST" action="{{ '/save/' + name if not is_new else '/create' }}">
     {% if is_new %}
     <div class="form-group">
@@ -659,8 +695,12 @@ def session_detail(name):
         except Exception:
             pass
 
-    # Get last 10 trades
-    csv_path = DATA_DIR / name / "paper_trades_v2.csv" if name != "default" else DATA_DIR / "paper_trades_v2.csv"
+    # Get last 10 trades — check both old and new CSV paths
+    csv_path = DATA_DIR / name / "trades.csv"
+    if not csv_path.exists():
+        csv_path = DATA_DIR / name / "paper_trades_v2.csv"
+    if not csv_path.exists() and name == "default":
+        csv_path = DATA_DIR / "paper_trades_v2.csv"
     recent = []
     if csv_path.exists():
         try:
@@ -689,7 +729,8 @@ def new_session():
 def edit_config(name):
     path = Path("configs/{}.json".format(name))
     config = json.loads(path.read_text()) if path.exists() else {}
-    return render_template_string(EDIT_HTML, name=name, config=config, knobs=KNOB_DEFS, is_new=False)
+    stats = get_session_stats(name)
+    return render_template_string(EDIT_HTML, name=name, config=config, knobs=KNOB_DEFS, is_new=False, stats=stats)
 
 
 @app.route("/clone/<name>")
