@@ -162,15 +162,25 @@ def get_session_stats(name):
 
 def get_local_sessions():
     sessions = []
+    seen = set()
     try:
-        result = subprocess.run(["pgrep", "-af", "paper_trade_v2.py"], capture_output=True, text=True)
+        result = subprocess.run(["pgrep", "-af", "python.*paper_trade_v2.py"], capture_output=True, text=True)
         for line in result.stdout.strip().split("\n"):
             if not line.strip():
+                continue
+            # Only match actual python processes, not bash wrappers or grep itself
+            if "pgrep" in line or "bash" in line or "grep" in line:
                 continue
             parts = line.split(None, 1)
             pid = parts[0]
             cmd = parts[1] if len(parts) > 1 else ""
+            if "paper_trade_v2.py" not in cmd:
+                continue
             name = cmd.split("--instance")[-1].strip().split()[0] if "--instance" in cmd else "default"
+            # Deduplicate by instance name
+            if name in seen:
+                continue
+            seen.add(name)
             stats = get_session_stats(name)
             sessions.append({"name": name, "pid": pid, "where": "local", "status": "running", **stats})
     except Exception:
@@ -508,6 +518,29 @@ SESSION_HTML = """
 <div class="empty">
     <div class="empty-icon">📊</div>
     <div>No trade data yet for this session</div>
+    <div style="margin-top:8px;font-size:0.82em" class="dim">If running on VPS, data will be pulled automatically</div>
+</div>
+{% endif %}
+
+{% if recent %}
+<div class="section">
+    <h2>Recent Trades (last 10)</h2>
+    <table>
+    <tr><th>Combo</th><th>Direction</th><th>Entry</th><th>Size</th><th>Impulse</th><th>T-Rem</th><th>Result</th><th>PnL</th></tr>
+    {% for t in recent %}
+    <tr>
+        <td>{{ t.get('combo','?') }}</td>
+        <td>{{ t.get('direction','?') }}</td>
+        <td>{{ (t.get('fill_price','0')|float * 100)|round(1) }}¢</td>
+        <td>{{ t.get('filled_size','?') }}</td>
+        <td>{{ t.get('impulse_bps','?') }}bp</td>
+        <td>{{ t.get('time_remaining','?') }}s</td>
+        <td><span class="tag {{ 'tag-active' if t.get('result')=='WIN' else 'tag-dead' }}">{{ t.get('result','?') }}</span></td>
+        <td class="{{ 'pnl-positive' if (t.get('pnl_taker','0')|float) > 0 else 'pnl-negative' }}" style="font-weight:600">
+            ${{ t.get('pnl_taker','0') }}</td>
+    </tr>
+    {% endfor %}
+    </table>
 </div>
 {% endif %}
 
@@ -617,8 +650,33 @@ def index():
 @app.route("/session/<name>")
 def session_detail(name):
     stats = get_session_stats(name)
+
+    # If no local data, try pulling from VPS first
+    if stats["trades"] == 0:
+        try:
+            subprocess.run(["./scripts/pull-data.sh", name], capture_output=True, timeout=15)
+            stats = get_session_stats(name)
+        except Exception:
+            pass
+
+    # Get last 10 trades
+    csv_path = DATA_DIR / name / "paper_trades_v2.csv" if name != "default" else DATA_DIR / "paper_trades_v2.csv"
+    recent = []
+    if csv_path.exists():
+        try:
+            with open(csv_path) as f:
+                reader = csv.DictReader(f)
+                if reader.fieldnames:
+                    reader.fieldnames = [h.strip() for h in reader.fieldnames]
+                all_rows = []
+                for row in reader:
+                    all_rows.append({k.strip(): v.strip() if isinstance(v, str) else v for k, v in row.items()})
+                recent = all_rows[-10:]
+        except Exception:
+            pass
+
     combo_sorted = sorted(stats.get("combos", {}).items(), key=lambda x: x[1]["pnl"], reverse=True)
-    return render_template_string(SESSION_HTML, name=name, stats=stats, combo_sorted=combo_sorted)
+    return render_template_string(SESSION_HTML, name=name, stats=stats, combo_sorted=combo_sorted, recent=recent)
 
 
 @app.route("/new")

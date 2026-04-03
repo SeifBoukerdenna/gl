@@ -201,6 +201,7 @@ config|cfg)
 
 # ── Web UI ────────────────────────────────────────────────
 ui|web)
+    pkill -f "dashboard.py" 2>/dev/null; sleep 0.5
     echo -e "${G}Opening dashboard at http://localhost:5555${RST}"
     python3 dashboard.py &
     sleep 1
