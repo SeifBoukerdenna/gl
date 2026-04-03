@@ -164,96 +164,138 @@ def get_vps_sessions():
 
 # ── Templates ─────────────────────────────────────────────────────
 BASE_CSS = """
-:root { --bg: #0d1117; --card: #161b22; --border: #21262d; --text: #c9d1d9;
-        --dim: #484f58; --blue: #58a6ff; --green: #3fb950; --red: #f85149;
-        --yellow: #d29922; --purple: #bc8cff; }
+:root { --bg: #0a0e14; --card: #12171f; --border: #1c2333; --text: #c5cdd9;
+        --dim: #4a5568; --blue: #5b9df9; --green: #34d399; --red: #f87171;
+        --yellow: #fbbf24; --purple: #a78bfa; --accent: #818cf8; }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: -apple-system, 'SF Mono', monospace; background: var(--bg); color: var(--text); }
-a { color: var(--blue); text-decoration: none; }
-a:hover { text-decoration: underline; }
+body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); font-size:14px; }
+a { color: var(--blue); text-decoration: none; transition: color 0.15s; }
+a:hover { color: var(--accent); }
 
-.container { max-width: 1100px; margin: 0 auto; padding: 20px; }
-.topbar { display:flex; justify-content:space-between; align-items:center; padding:15px 0; border-bottom:1px solid var(--border); margin-bottom:20px; }
-.topbar h1 { font-size:1.3em; color:var(--blue); }
-.topbar .actions { display:flex; gap:8px; }
+.container { max-width: 1140px; margin: 0 auto; padding: 24px; }
 
-.section { margin-bottom: 30px; }
-.section h2 { font-size:0.85em; color:var(--dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; }
+/* Topbar */
+.topbar { display:flex; justify-content:space-between; align-items:center; padding:16px 0 20px; margin-bottom:24px; }
+.topbar h1 { font-size:1.4em; font-weight:700; background: linear-gradient(135deg, var(--blue), var(--purple)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.topbar .actions { display:flex; gap:8px; align-items:center; }
+.topbar .refresh-hint { font-size:0.72em; color:var(--dim); }
+
+.section { margin-bottom: 32px; }
+.section h2 { font-size:0.78em; color:var(--dim); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:14px; font-weight:600; }
 
 /* Buttons */
-.btn { display:inline-flex; align-items:center; gap:4px; padding:6px 14px; border-radius:6px; font-size:0.82em;
-       font-family:inherit; cursor:pointer; border:1px solid var(--border); background:var(--card); color:var(--text); transition:all 0.15s; }
-.btn:hover { background:#30363d; text-decoration:none; }
-.btn-sm { padding:4px 10px; font-size:0.78em; }
-.btn-green { border-color:#238636; color:var(--green); }
-.btn-green:hover { background:#238636; color:#fff; }
-.btn-red { border-color:#da3633; color:var(--red); }
-.btn-red:hover { background:#da3633; color:#fff; }
-.btn-blue { border-color:#1f6feb; color:var(--blue); }
-.btn-blue:hover { background:#1f6feb; color:#fff; }
+.btn { display:inline-flex; align-items:center; gap:5px; padding:7px 16px; border-radius:8px; font-size:0.82em;
+       font-family:inherit; cursor:pointer; border:1px solid var(--border); background:var(--card); color:var(--text);
+       transition:all 0.2s; font-weight:500; }
+.btn:hover { background:#1e2536; transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.3); text-decoration:none; }
+.btn:active { transform:translateY(0); }
+.btn-sm { padding:4px 10px; font-size:0.76em; border-radius:6px; }
+.btn-green { border-color:#059669; color:var(--green); }
+.btn-green:hover { background:#059669; color:#fff; }
+.btn-red { border-color:#dc2626; color:var(--red); }
+.btn-red:hover { background:#dc2626; color:#fff; }
+.btn-blue { border-color:#2563eb; color:var(--blue); }
+.btn-blue:hover { background:#2563eb; color:#fff; }
+.btn-purple { border-color:#7c3aed; color:var(--purple); }
+.btn-purple:hover { background:#7c3aed; color:#fff; }
 
 /* Table */
 table { width:100%; border-collapse:collapse; }
-th { text-align:left; padding:8px 12px; color:var(--dim); font-size:0.78em; font-weight:600; border-bottom:2px solid var(--border); }
-td { padding:8px 12px; border-bottom:1px solid var(--border); font-size:0.88em; }
-tr:hover { background:var(--card); }
+th { text-align:left; padding:10px 14px; color:var(--dim); font-size:0.72em; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; border-bottom:2px solid var(--border); }
+td { padding:10px 14px; border-bottom:1px solid var(--border); font-size:0.88em; }
+tr { transition: background 0.15s; }
+tr:hover { background:rgba(91,157,249,0.04); }
 
 /* Cards */
-.card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px; }
-.card-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px; }
-.card h3 { font-size:1em; margin-bottom:4px; }
-.card .desc { color:var(--dim); font-size:0.82em; margin-bottom:12px; }
-.card .actions { display:flex; gap:6px; margin-top:12px; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px;
+        transition:border-color 0.2s, box-shadow 0.2s; }
+.card:hover { border-color:var(--dim); box-shadow:0 4px 16px rgba(0,0,0,0.2); }
+.card-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:14px; }
+.card h3 { font-size:1em; margin-bottom:3px; font-weight:600; }
+.card .desc { color:var(--dim); font-size:0.82em; margin-bottom:10px; }
+.card .meta { font-size:0.76em; color:var(--dim); padding:8px 0; border-top:1px solid var(--border); margin-top:8px;
+              display:flex; gap:12px; flex-wrap:wrap; }
+.card .meta span { background:var(--bg); padding:2px 8px; border-radius:4px; }
+.card .actions { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
 
 /* Stats */
-.stat { display:inline-block; margin-right:20px; }
-.stat-val { font-size:1.6em; font-weight:700; }
-.stat-label { font-size:0.72em; color:var(--dim); }
+.stats-row { display:flex; gap:24px; margin-bottom:8px; flex-wrap:wrap; }
+.stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 24px; min-width:120px; }
+.stat-val { font-size:1.8em; font-weight:800; font-variant-numeric:tabular-nums; }
+.stat-label { font-size:0.68em; color:var(--dim); text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
 
 /* Tags */
-.tag { display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.72em; font-weight:600; }
-.tag-active { background:#0d4429; color:var(--green); }
-.tag-dead { background:#3d1e20; color:var(--red); }
-.tag-local { background:#1c2a3d; color:var(--blue); }
-.tag-vps { background:#2d1f3d; color:var(--purple); }
+.tag { display:inline-block; padding:3px 10px; border-radius:20px; font-size:0.7em; font-weight:600; letter-spacing:0.3px; }
+.tag-active { background:rgba(52,211,153,0.12); color:var(--green); }
+.tag-dead { background:rgba(248,113,113,0.12); color:var(--red); }
+.tag-local { background:rgba(91,157,249,0.12); color:var(--blue); }
+.tag-vps { background:rgba(167,139,250,0.12); color:var(--purple); }
 
 .green { color:var(--green); } .red { color:var(--red); } .yellow { color:var(--yellow); } .dim { color:var(--dim); }
 
+/* Pnl with glow */
+.pnl-positive { color:var(--green); text-shadow:0 0 12px rgba(52,211,153,0.3); }
+.pnl-negative { color:var(--red); text-shadow:0 0 12px rgba(248,113,113,0.3); }
+
 /* Form */
 .form-group { margin-bottom:14px; }
-.form-group label { display:block; font-size:0.82em; color:var(--dim); margin-bottom:4px; }
+.form-group label { display:block; font-size:0.82em; color:var(--dim); margin-bottom:4px; font-weight:500; }
 .form-group input, .form-group textarea, .form-group select {
-    width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border);
-    color:var(--text); border-radius:4px; font-family:inherit; font-size:0.88em; }
-.form-group input:focus, .form-group textarea:focus { border-color:var(--blue); outline:none; }
-.form-group .hint { font-size:0.72em; color:var(--dim); margin-top:2px; }
+    width:100%; padding:9px 12px; background:var(--bg); border:1px solid var(--border);
+    color:var(--text); border-radius:6px; font-family:inherit; font-size:0.88em; transition:border-color 0.2s; }
+.form-group input:focus, .form-group textarea:focus { border-color:var(--blue); outline:none; box-shadow:0 0 0 3px rgba(91,157,249,0.15); }
 textarea { min-height:120px; resize:vertical; }
-.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-
-/* Combo table inside card */
-.combo-table { font-size:0.78em; margin-top:8px; }
-.combo-table td { padding:3px 8px; border:none; }
 
 /* Flash */
-.flash { padding:10px 16px; border-radius:6px; margin-bottom:15px; font-size:0.88em; background:#0d4429; color:var(--green); border:1px solid #238636; }
-.flash-error { background:#3d1e20; color:var(--red); border-color:#da3633; }
+.flash { padding:12px 18px; border-radius:8px; margin-bottom:16px; font-size:0.88em;
+         background:rgba(52,211,153,0.1); color:var(--green); border:1px solid rgba(52,211,153,0.2);
+         animation: flashIn 0.3s ease; }
+@keyframes flashIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
 
-/* Knob slider */
-.knob-row { display:grid; grid-template-columns:1fr 80px; gap:8px; align-items:center; margin-bottom:8px; }
+/* Knob editor */
+.knob-row { display:grid; grid-template-columns:1fr 90px; gap:10px; align-items:center; margin-bottom:6px;
+            padding:6px 0; border-bottom:1px solid rgba(28,35,51,0.5); }
 .knob-row label { font-size:0.82em; }
-.knob-row input { text-align:right; }
+.knob-row .knob-key { font-size:0.68em; color:var(--dim); font-family:'SF Mono',monospace; }
+.knob-row input { text-align:right; padding:6px 8px; }
+
+/* Pulse animation for active sessions */
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+.pulse { animation: pulse 2s ease-in-out infinite; }
+
+/* Empty state */
+.empty { text-align:center; padding:40px; color:var(--dim); }
+.empty-icon { font-size:2.5em; margin-bottom:10px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--dim); }
+
+/* Auto-refresh indicator */
+.auto-refresh { position:fixed; bottom:16px; right:16px; font-size:0.72em; color:var(--dim); background:var(--card);
+                padding:6px 12px; border-radius:20px; border:1px solid var(--border); }
+.auto-refresh .dot { display:inline-block; width:6px; height:6px; background:var(--green); border-radius:50%; margin-right:5px;
+                     animation:pulse 2s infinite; }
+
+hr { border:none; border-top:1px solid var(--border); margin:18px 0; }
 """
 
 INDEX_HTML = """
 <!DOCTYPE html><html><head><title>PM Dashboard</title><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="30">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>""" + BASE_CSS + """</style></head><body>
 <div class="container">
 
 <div class="topbar">
     <h1>Polymarket Bot</h1>
     <div class="actions">
+        <span class="refresh-hint">auto-refreshes every 30s</span>
         <a href="/" class="btn">Refresh</a>
+        <a href="/import" class="btn btn-purple">Import</a>
         <a href="/new" class="btn btn-green">+ New Session</a>
     </div>
 </div>
@@ -264,18 +306,22 @@ INDEX_HTML = """
 
 <!-- Overview Stats -->
 <div class="section">
-    <div style="display:flex; gap:40px; margin-bottom:5px;">
+    <div class="stats-row">
         <div class="stat">
-            <div class="stat-val">{{ sessions|length }}</div>
-            <div class="stat-label">SESSIONS</div>
+            <div class="stat-val" style="color:var(--blue)">{{ sessions|length }}</div>
+            <div class="stat-label">Active Sessions</div>
         </div>
         <div class="stat">
             <div class="stat-val">{{ total_trades }}</div>
-            <div class="stat-label">TOTAL TRADES</div>
+            <div class="stat-label">Total Trades</div>
         </div>
         <div class="stat">
-            <div class="stat-val {{ 'green' if total_pnl >= 0 else 'red' }}">${{ total_pnl }}</div>
-            <div class="stat-label">TOTAL PNL</div>
+            <div class="stat-val {{ 'pnl-positive' if total_pnl >= 0 else 'pnl-negative' }}">${{ total_pnl }}</div>
+            <div class="stat-label">Total PnL (Taker)</div>
+        </div>
+        <div class="stat">
+            <div class="stat-val {{ 'green' if total_wr >= 60 else 'yellow' if total_wr >= 50 else 'red' }}">{{ total_wr }}%</div>
+            <div class="stat-label">Overall Win Rate</div>
         </div>
     </div>
 </div>
@@ -283,18 +329,23 @@ INDEX_HTML = """
 <!-- Sessions Table -->
 <div class="section">
     <h2>Sessions</h2>
+    {% if sessions %}
     <table>
-    <tr><th>Name</th><th>Where</th><th>Status</th><th>Trades</th><th>Win%</th><th>PnL</th><th>Top Combo</th><th></th></tr>
+    <tr><th>Name</th><th>Where</th><th>Status</th><th>Trades</th><th>Win%</th><th>PnL</th><th>Best Combo</th><th></th></tr>
     {% for s in sessions %}
     <tr>
         <td><strong><a href="/session/{{ s.name }}">{{ s.name }}</a></strong></td>
         <td><span class="tag tag-{{ s.where }}">{{ s.where }}</span></td>
-        <td><span class="tag tag-{{ 'active' if s.status in ['running','active'] else 'dead' }}">{{ s.status }}</span></td>
+        <td><span class="tag tag-{{ 'active' if s.status in ['running','active'] else 'dead' }}">
+            {% if s.status in ['running','active'] %}<span class="dot pulse" style="display:inline-block;width:6px;height:6px;background:var(--green);border-radius:50%;margin-right:4px"></span>{% endif %}
+            {{ s.status }}</span></td>
         <td>{{ s.trades }}</td>
-        <td class="{{ 'green' if s.wr >= 65 else 'yellow' if s.wr >= 55 else 'red' if s.trades > 0 else 'dim' }}">{{ s.wr }}%</td>
-        <td class="{{ 'green' if s.pnl > 0 else 'red' if s.pnl < 0 else 'dim' }}">${{ s.pnl }}</td>
-        <td class="dim">{{ s.top_combo or '--' }}</td>
-        <td>
+        <td class="{{ 'green' if s.wr >= 65 else 'yellow' if s.wr >= 55 else 'red' if s.trades > 0 else 'dim' }}">
+            {{ s.wr }}%</td>
+        <td class="{{ 'pnl-positive' if s.pnl > 0 else 'pnl-negative' if s.pnl < 0 else 'dim' }}" style="font-weight:600">
+            ${{ s.pnl }}</td>
+        <td class="dim" style="font-size:0.8em">{{ s.top_combo or '--' }}</td>
+        <td style="text-align:right">
             {% if s.status in ['running','active'] %}
             <a href="/stop/{{ s.where }}/{{ s.name }}" class="btn btn-sm btn-red" onclick="return confirm('Stop {{ s.name }}?')">Stop</a>
             {% else %}
@@ -304,10 +355,14 @@ INDEX_HTML = """
         </td>
     </tr>
     {% endfor %}
-    {% if not sessions %}
-    <tr><td colspan="8" class="dim" style="text-align:center; padding:20px">No sessions running. <a href="/new">Create one</a></td></tr>
-    {% endif %}
     </table>
+    {% else %}
+    <div class="empty">
+        <div class="empty-icon">📡</div>
+        <div>No sessions running</div>
+        <div style="margin-top:8px"><a href="/new" class="btn btn-green">Create your first session</a></div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Configs -->
@@ -316,20 +371,21 @@ INDEX_HTML = """
     <div class="card-grid">
     {% for c in configs %}
     <div class="card">
-        <h3>{{ c.name }}</h3>
+        <h3>{{ c.name }}{% if c.name == 'default' %} <span class="tag tag-active" style="font-size:0.65em;vertical-align:middle">DEFAULT</span>{% endif %}</h3>
         <div class="desc">{{ c.description or 'No description' }}</div>
-        <div style="font-size:0.78em; color:var(--dim);">
-            Entry: {{ c.data.get('MIN_ENTRY_PRICE', '?') }}-{{ c.data.get('MAX_ENTRY_PRICE', '?') }} |
-            Impulse: <{{ c.data.get('MAX_IMPULSE_BP', '?') }}bp |
-            Dead: T-{{ c.data.get('DEAD_ZONE_START', '?') }}-{{ c.data.get('DEAD_ZONE_END', '?') }}s
+        <div class="meta">
+            <span>Entry: {{ (c.data.get('MIN_ENTRY_PRICE', 0.2) * 100)|int }}-{{ (c.data.get('MAX_ENTRY_PRICE', 0.8) * 100)|int }}¢</span>
+            <span>Impulse: &lt;{{ c.data.get('MAX_IMPULSE_BP', '?') }}bp</span>
+            <span>Dead: {{ c.data.get('DEAD_ZONE_START', '?') }}-{{ c.data.get('DEAD_ZONE_END', '?') }}s</span>
+            <span>${{ c.data.get('BASE_TRADE_DOLLARS', 100) }}/trade</span>
         </div>
         <div class="actions">
             <a href="/edit/{{ c.name }}" class="btn btn-sm">Edit</a>
-            <a href="/clone/{{ c.name }}" class="btn btn-sm">Clone</a>
-            <a href="/start/local/{{ c.name }}" class="btn btn-sm btn-green">Run Local</a>
-            <a href="/start/vps/{{ c.name }}" class="btn btn-sm btn-blue">Run VPS</a>
+            <a href="/clone/{{ c.name }}" class="btn btn-sm btn-purple">Clone</a>
+            <a href="/start/local/{{ c.name }}" class="btn btn-sm btn-green">▶ Local</a>
+            <a href="/start/vps/{{ c.name }}" class="btn btn-sm btn-blue">▶ VPS</a>
             {% if c.name != 'default' %}
-            <a href="/delete-config/{{ c.name }}" class="btn btn-sm btn-red" onclick="return confirm('Delete config {{ c.name }}?')">Delete</a>
+            <a href="/delete-config/{{ c.name }}" class="btn btn-sm btn-red" onclick="return confirm('Delete {{ c.name }}?')">✕</a>
             {% endif %}
         </div>
     </div>
@@ -337,50 +393,76 @@ INDEX_HTML = """
     </div>
 </div>
 
+<div class="auto-refresh"><span class="dot"></span>Auto-refresh 30s</div>
+
 </div></body></html>
 """
 
 SESSION_HTML = """
 <!DOCTYPE html><html><head><title>{{ name }} — PM Dashboard</title><meta charset="utf-8">
-<style>""" + BASE_CSS + """</style></head><body>
+<meta http-equiv="refresh" content="30">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>""" + BASE_CSS + """
+.combo-bar { height:4px; border-radius:2px; margin-top:4px; }
+.combo-bar-fill { height:100%; border-radius:2px; transition:width 0.5s; }
+</style></head><body>
 <div class="container">
 <div class="topbar">
-    <h1><a href="/" style="color:var(--dim)">Dashboard</a> / {{ name }}</h1>
+    <h1><a href="/" style="color:var(--dim);-webkit-text-fill-color:var(--dim)">Dashboard</a> <span style="color:var(--dim);-webkit-text-fill-color:var(--dim)">/</span> {{ name }}</h1>
     <div class="actions">
-        <a href="/" class="btn">Back</a>
+        <a href="/" class="btn">← Back</a>
         <a href="/edit/{{ name }}" class="btn">Edit Config</a>
     </div>
 </div>
-<div style="display:flex; gap:40px; margin-bottom:25px;">
+
+<div class="stats-row" style="margin-bottom:30px">
     <div class="stat">
-        <div class="stat-val">{{ stats.trades }}</div>
-        <div class="stat-label">TRADES</div>
+        <div class="stat-val" style="color:var(--blue)">{{ stats.trades }}</div>
+        <div class="stat-label">Trades</div>
     </div>
     <div class="stat">
         <div class="stat-val {{ 'green' if stats.wr >= 60 else 'yellow' if stats.wr >= 50 else 'red' }}">{{ stats.wr }}%</div>
-        <div class="stat-label">WIN RATE</div>
+        <div class="stat-label">Win Rate</div>
     </div>
     <div class="stat">
-        <div class="stat-val {{ 'green' if stats.pnl >= 0 else 'red' }}">${{ stats.pnl }}</div>
-        <div class="stat-label">PNL (TAKER)</div>
+        <div class="stat-val {{ 'pnl-positive' if stats.pnl >= 0 else 'pnl-negative' }}">${{ stats.pnl }}</div>
+        <div class="stat-label">PnL (Taker)</div>
+    </div>
+    <div class="stat">
+        <div class="stat-val dim">{{ stats.combos|length }}</div>
+        <div class="stat-label">Active Combos</div>
     </div>
 </div>
+
 {% if stats.combos %}
 <div class="section">
     <h2>Per-Combo Breakdown</h2>
     <table>
-    <tr><th>Combo</th><th>Trades</th><th>Win%</th><th>PnL</th></tr>
-    {% for cname, c in stats.combos|dictsort(by='value', attribute='pnl', reverse=true) %}
+    <tr><th>Combo</th><th>Trades</th><th>Wins</th><th>Win%</th><th>PnL</th><th style="width:120px">Performance</th></tr>
+    {% for cname, c in combo_sorted %}
     <tr>
         <td><strong>{{ cname }}</strong></td>
         <td>{{ c.n }}</td>
+        <td>{{ c.wins }}</td>
         <td class="{{ 'green' if c.wr >= 65 else 'yellow' if c.wr >= 55 else 'red' }}">{{ c.wr }}%</td>
-        <td class="{{ 'green' if c.pnl > 0 else 'red' }}">${{ c.pnl }}</td>
+        <td class="{{ 'pnl-positive' if c.pnl > 0 else 'pnl-negative' }}" style="font-weight:600">${{ c.pnl }}</td>
+        <td>
+            <div class="combo-bar" style="background:rgba(248,113,113,0.15)">
+                <div class="combo-bar-fill" style="width:{{ c.wr }}%; background:{{ 'var(--green)' if c.wr >= 60 else 'var(--yellow)' if c.wr >= 50 else 'var(--red)' }}"></div>
+            </div>
+        </td>
     </tr>
     {% endfor %}
     </table>
 </div>
+{% else %}
+<div class="empty">
+    <div class="empty-icon">📊</div>
+    <div>No trade data yet for this session</div>
+</div>
 {% endif %}
+
+<div class="auto-refresh"><span class="dot"></span>Auto-refresh 30s</div>
 </div></body></html>
 """
 
@@ -474,14 +556,18 @@ def index():
     total_trades = sum(s["trades"] for s in sessions)
     total_pnl = sum(s["pnl"] for s in sessions)
 
+    total_wins = sum(s.get("wins", 0) for s in sessions)
+    total_wr = round(total_wins / total_trades * 100, 1) if total_trades > 0 else 0
+
     return render_template_string(INDEX_HTML, sessions=sessions, configs=configs,
-                                  total_trades=total_trades, total_pnl=total_pnl)
+                                  total_trades=total_trades, total_pnl=total_pnl, total_wr=total_wr)
 
 
 @app.route("/session/<name>")
 def session_detail(name):
     stats = get_session_stats(name)
-    return render_template_string(SESSION_HTML, name=name, stats=stats)
+    combo_sorted = sorted(stats.get("combos", {}).items(), key=lambda x: x[1]["pnl"], reverse=True)
+    return render_template_string(SESSION_HTML, name=name, stats=stats, combo_sorted=combo_sorted)
 
 
 @app.route("/new")
