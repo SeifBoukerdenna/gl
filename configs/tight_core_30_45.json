@@ -1,0 +1,11 @@
+{
+    "_description": "30-35c was 100% win in v2, 35-40c was 80%. Remove 25-30c risk.",
+    "MIN_ENTRY_PRICE": 0.30,
+    "MAX_ENTRY_PRICE": 0.45,
+    "DOWN_MIN_ENTRY": 0.30,
+    "MAX_IMPULSE_BP": 15,
+    "DEAD_ZONE_START": 90,
+    "DEAD_ZONE_END": 210,
+    "WINDOW_BUFFER_START": 10,
+    "WINDOW_BUFFER_END": 10
+}
