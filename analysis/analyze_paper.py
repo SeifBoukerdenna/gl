@@ -14,7 +14,8 @@ import matplotlib.ticker as mticker
 from pathlib import Path
 from datetime import datetime
 
-DATA_PATH = Path("data/paper_trades_v2.csv")
+import os
+DATA_PATH = Path(os.environ.get("ANALYZE_CSV", "data/paper_trades_v2.csv"))
 OUTPUT_DIR = Path("output")
 
 G = "\033[32m"

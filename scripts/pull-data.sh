@@ -1,19 +1,23 @@
 #!/bin/bash
-# Pull trade data and outputs from VPS for local analysis
-# Usage: ./scripts/pull-data.sh [INSTANCE]
+# Pull trade data from VPS
+# Usage: ./scripts/pull-data.sh              (pull all sessions)
+#        ./scripts/pull-data.sh SESSION_NAME  (pull one session)
 source .env 2>/dev/null || true
 HOST="${VPS_HOST:-167.172.50.38}"
 USER="${VPS_USER:-root}"
 RPATH="${VPS_PATH:-/opt/polymarket-bot}"
-INSTANCE="${1:-default}"
 
-echo "Pulling data from ${USER}@${HOST}..."
+echo "Pulling data from ${HOST}..."
 
-# Try new path first, fall back to old ~/bot/ path
-rsync -avz ${USER}@${HOST}:${RPATH}/data/ ./data/ 2>/dev/null || \
-rsync -avz ${USER}@${HOST}:/root/bot/data/ ./data/ 2>/dev/null || \
-echo "No data found at either path"
+if [ -n "$1" ]; then
+    # Single session
+    mkdir -p data/$1
+    rsync -avz ${USER}@${HOST}:${RPATH}/data/$1/ ./data/$1/
+else
+    # All data
+    rsync -avz --include='*/' --include='*.csv' --exclude='*' ${USER}@${HOST}:${RPATH}/data/ ./data/
+fi
 
 echo ""
-echo "Files pulled:"
-ls -lh data/*.csv 2>/dev/null || echo "No CSVs"
+echo "=== Local data ==="
+find data -name "*.csv" -exec sh -c 'echo "  $(wc -l < "$1") lines  $1"' _ {} \;
