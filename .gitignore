@@ -1,0 +1,33 @@
+# Data files (large, session-specific)
+data/*.csv
+data/*.parquet
+data/*/
+historical/
+
+# Output
+output/
+
+# Environment
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+nohup.out
+
+# Large text outputs
+*.txt
+!README.md
+
+# IDE
+.idea/
+.vscode/
+
+# Claude
+.claude/

@@ -1,0 +1,19 @@
+[Unit]
+Description=Polymarket 5-min BTC Paper Trading Bot (%i)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/polymarket-bot
+ExecStart=/opt/polymarket-bot/.venv/bin/python -u bot/paper_trade_v2.py --instance %i
+ExecStop=/bin/kill -SIGINT $MAINPID
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=30
+StandardOutput=append:/var/log/polymarket-bot/%i.log
+StandardError=append:/var/log/polymarket-bot/%i.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
