@@ -550,8 +550,11 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
     if state.window_open and state.window_open > 0:
         delta_bps = ((btc - state.offset) - state.window_open) / state.window_open * 10000
 
-    # Total cost breakdown
-    notional = round(fill_price * filled_size, 2)       # what you pay for the shares
+    # Total cost breakdown — use correct side (NO cost = 1-fill_price)
+    if direction == "YES":
+        notional = round(fill_price * filled_size, 2)
+    else:
+        notional = round((1.0 - fill_price) * filled_size, 2)
     total_fee = round(fee * filled_size, 2)              # total fee in dollars
     total_slip = round(abs(slippage) * filled_size, 2)   # total slippage cost in dollars
     total_cost = round(notional + total_fee + total_slip, 2)  # everything you spend
@@ -960,51 +963,27 @@ async def window_manager():
                 state.window_active = False
                 prev_ws = state.window_start
 
-                # Immediate estimate from book
+                # INSTANT settlement from book mid — no waiting
                 pm_mid_estimate = None
                 if state.book.mid > 0:
                     pm_mid_estimate = "Up" if state.book.mid > 0.50 else "Down"
 
-                # Queue for proper resolution
-                state.pending_windows.append(prev_ws)
-
-                # Try to get actual PM outcome
-                await wait(SETTLE_DELAY_INITIAL)
-                if not state.running:
-                    break
-
-                slug = "btc-updown-5m-{}".format(prev_ws)
-                outcome = None
-                fp = None
-                for _ in range(SETTLE_MAX_RETRIES):
-                    _, _, fp, _, outcome = await fetch_event(http, slug)
-                    if outcome:
-                        break
-                    await wait(SETTLE_RETRY_DELAY)
-                    if not state.running:
-                        break
-
-                if not state.running:
-                    break
-
-                if outcome:
-                    settle_window(prev_ws, outcome, final_price=fp)
-                    state.completed_windows.append({"window_start": prev_ws, "outcome": outcome})
-                    if pm_mid_estimate and pm_mid_estimate != outcome:
-                        print("  {}[NOTE] Book mid said {} but PM settled {}{}".format(Y, pm_mid_estimate, outcome, RST))
-                elif pm_mid_estimate:
+                if pm_mid_estimate:
                     settle_window(prev_ws, pm_mid_estimate)
                     state.completed_windows.append({"window_start": prev_ws, "outcome": pm_mid_estimate})
-                    print("  {}[WARN] Used book mid for {} — resolver will verify{}".format(Y, prev_ws, RST))
+                    print("  {}[SETTLED] {} via book mid (resolver will verify){}".format(C, pm_mid_estimate, RST))
                 else:
-                    print("  {}[WARN] Can't settle {} — queued for resolver{}".format(Y, prev_ws, RST))
+                    print("  {}[WARN] No book mid — queued for resolver{}".format(Y, RST))
+
+                # Queue for background verification
+                state.pending_windows.append(prev_ws)
 
                 # Reset window tracking
                 state.window_price_high = None
                 state.window_price_low = None
                 state.skip_prints_this_window = 0
 
-                # Setup next window
+                # Setup next window IMMEDIATELY — don't wait for settlement API
                 now_i = int(time.time())
                 state.window_start = now_i - (now_i % 300)
                 state.window_end = state.window_start + 300

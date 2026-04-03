@@ -1,9 +1,0 @@
-{
-    "_description": "Wide entry — let the strategy trade freely, flat sizing protects us",
-    "MIN_ENTRY_PRICE": 0.15,
-    "MAX_ENTRY_PRICE": 0.85,
-    "DOWN_MIN_ENTRY": 0.20,
-    "MAX_IMPULSE_BP": 30,
-    "DEAD_ZONE_START": 150,
-    "DEAD_ZONE_END": 210
-}

@@ -2,7 +2,8 @@
 Deep analysis of paper_trades.csv.
 Gives every dimension needed to make production decisions.
 
-Usage: python analyze_paper.py
+Usage: python analyze_paper.py                     # single session
+       ANALYZE_ALL=1 python analyze_paper.py       # all sessions + comparison
 """
 
 import polars as pl
@@ -21,14 +22,33 @@ def find_csv():
     env = os.environ.get("ANALYZE_CSV")
     if env:
         return Path(env)
-    # New naming: data/{instance}/trades.csv
     for p in [Path("data/default/trades.csv"), Path("data/paper_trades_v2.csv")]:
         if p.exists():
             return p
     return Path("data/paper_trades_v2.csv")
 
-DATA_PATH = find_csv()
-OUTPUT_DIR = Path("output")
+
+def find_all_session_csvs():
+    """Find all session CSVs across both naming conventions."""
+    csvs = {}
+    data_dir = Path("data")
+    if not data_dir.exists():
+        return csvs
+    for d in sorted(data_dir.iterdir()):
+        if not d.is_dir() or d.name.startswith("_"):
+            continue
+        # Try new naming first, then old
+        for fname in ["trades.csv", "paper_trades_v2.csv"]:
+            csv_path = d / fname
+            if csv_path.exists():
+                csvs[d.name] = csv_path
+                break
+    # Also check root-level default
+    root_csv = data_dir / "paper_trades_v2.csv"
+    if root_csv.exists() and "default" not in csvs:
+        csvs["default"] = root_csv
+    return csvs
+
 
 G = "\033[32m"
 R = "\033[31m"
@@ -57,46 +77,51 @@ def divider():
     print("  {}{}{}".format(DIM, "-" * 66, RST))
 
 
-def main():
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    df = pl.read_csv(DATA_PATH, infer_schema_length=10000)
-    # Strip whitespace from column names and string values
+def load_and_clean(csv_path):
+    """Load a CSV and return cleaned polars DataFrame."""
+    df = pl.read_csv(csv_path, infer_schema_length=10000)
     df = df.rename({col: col.strip() for col in df.columns})
     for col in df.columns:
         if df[col].dtype == pl.Utf8:
             df = df.with_columns(pl.col(col).str.strip_chars().alias(col))
-    # Cast numeric columns
     num_cols = [
         "timestamp", "window_start", "impulse_bps", "time_remaining",
         "best_bid", "best_ask", "mid", "spread", "fill_price",
         "levels_consumed", "slippage", "fee", "effective_entry_taker",
         "effective_entry_maker", "filled_size", "btc_price", "delta_bps",
         "book_age_ms", "pnl_taker", "pnl_maker",
+        "notional", "total_fee", "total_slippage", "total_cost",
     ]
     for col in num_cols:
         if col in df.columns:
             df = df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
     s = df.filter(pl.col("outcome").is_not_null() & (pl.col("outcome") != ""))
-
     if s.height == 0:
-        print("No settled trades.")
-        return
+        return None
+    s = s.with_columns([
+        (pl.col("fill_price") * 100).alias("entry_c"),
+        pl.col("impulse_bps").abs().alias("abs_imp"),
+        pl.col("slippage").abs().alias("abs_slip"),
+    ])
+    return s
+
+
+def analyze_session(csv_path, session_name, output_dir):
+    """Full analysis of a single session. Charts saved to output_dir."""
+    s = load_and_clean(csv_path)
+    if s is None:
+        print("  No settled trades.")
+        return None
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     n_trades = s.height
     n_windows = s["window_start"].n_unique()
     hours = (s["timestamp"].max() - s["timestamp"].min()) / 3600
     combos = sorted(s["combo"].unique().to_list())
 
-    # Derived columns
-    s = s.with_columns([
-        (pl.col("fill_price") * 100).alias("entry_c"),
-        pl.col("impulse_bps").abs().alias("abs_imp"),
-        pl.col("slippage").abs().alias("abs_slip"),
-    ])
-
-    print("\n{}{}  PAPER TRADING DEEP ANALYSIS  {}{}".format(
-        BOLD, M, RST, M + "=" * 40 + RST
+    print("\n{}{}  PAPER TRADING DEEP ANALYSIS — {}  {}{}".format(
+        BOLD, M, session_name.upper(), RST, M + "=" * 30 + RST
     ))
     print("  {} trades | {} windows | {:.1f} hours | {} combos\n".format(
         n_trades, n_windows, hours, len(combos)
@@ -123,12 +148,10 @@ def main():
         avg_fee = c["fee"].abs().mean() * 100
         avg_entry = c["fill_price"].mean() * 100
 
-        # Max drawdown
         cum = np.cumsum(c.sort("timestamp")["pnl_taker"].to_list())
         peak = np.maximum.accumulate(cum)
         dd = (peak - cum).max()
 
-        # Win/loss streaks
         results = c.sort("timestamp")["result"].to_list()
         max_win_streak = max_loss_streak = cur = 0
         prev = None
@@ -185,8 +208,7 @@ def main():
             total = b["pnl_taker"].sum()
             w_avg = b.filter(pl.col("result") == "WIN")["pnl_taker"].mean() if wins > 0 else 0
             l_avg = b.filter(pl.col("result") == "LOSS")["pnl_taker"].mean() if n - wins > 0 else 0
-            # Expected value per dollar risked
-            risk = lo / 100  # approximate risk per share
+            risk = lo / 100
             ev = avg / (risk * b["filled_size"].mean()) if risk > 0 else 0
             print("  {:>3}-{:<3}c {:>5} {} {:>8} {:>9} {:>8} {:>8} {:>7.1f}%".format(
                 lo, hi, n, cwr(wr), cpnl(avg, "+.1f"), cpnl(total),
@@ -242,6 +264,8 @@ def main():
 
     for d, label in [("YES", "BUY UP  "), ("NO", "BUY DOWN")]:
         b = s.filter(pl.col("direction") == d)
+        if b.height == 0:
+            continue
         n = b.height
         wins = b.filter(pl.col("result") == "WIN").height
         wr = wins / n * 100
@@ -275,7 +299,6 @@ def main():
                 wins = cell.filter(pl.col("result") == "WIN").height
                 wr = wins / n * 100
                 pnl = cell["pnl_taker"].sum()
-                # Direction split
                 yes_n = cell.filter(pl.col("direction") == "YES").height
                 no_n = cell.filter(pl.col("direction") == "NO").height
                 print("    {:>6}: {:>3} trades  {}  PnL: {:>10}  ({}UP/{} DOWN)".format(
@@ -296,7 +319,6 @@ def main():
         total_pnl = w["pnl_taker"].sum()
         win_results.append((ws, outcome, n, wins, total_pnl))
 
-    # Show worst and best windows
     win_results.sort(key=lambda x: x[4])
     print("  {}Worst 5 windows:{}".format(R, RST))
     for ws, outcome, n, wins, pnl in win_results[:5]:
@@ -316,7 +338,6 @@ def main():
     section(8, "RISK ANALYSIS")
     # ══════════════════════════════════════════════════════════════
 
-    # Per-window PnL distribution
     win_pnls = [r[4] for r in win_results]
     print("  Per-window PnL distribution:")
     print("    Mean:   {}".format(cpnl(np.mean(win_pnls), "+.0f")))
@@ -327,23 +348,21 @@ def main():
     neg = sum(1 for p in win_pnls if p < 0)
     print("    Losing windows: {}/{} ({:.0f}%)".format(neg, len(win_pnls), neg / len(win_pnls) * 100))
 
-    # Correlation between combos — do they all lose together?
     print("\n  Correlation risk (windows where ALL active combos lost):")
     all_loss_windows = 0
     for ws, outcome, n, wins, pnl in win_results:
         if wins == 0 and n > 1:
             all_loss_windows += 1
     multi_trade_windows = sum(1 for _, _, n, _, _ in win_results if n > 1)
-    print("    {}/{} multi-trade windows had ALL combos lose".format(
-        all_loss_windows, multi_trade_windows
-    ))
+    if multi_trade_windows > 0:
+        print("    {}/{} multi-trade windows had ALL combos lose".format(
+            all_loss_windows, multi_trade_windows
+        ))
 
-    # Largest single-window loss
     print("    Largest single-window loss: {}".format(cpnl(min(win_pnls))))
 
-    # Sharpe-like ratio (per trade)
     trade_pnls = s["pnl_taker"].to_list()
-    if np.std(trade_pnls) > 0:
+    if np.std(trade_pnls) > 0 and hours > 0:
         sharpe = np.mean(trade_pnls) / np.std(trade_pnls) * np.sqrt(len(trade_pnls) / hours * 24)
         print("    Daily Sharpe (per-trade): {:.2f}".format(sharpe))
 
@@ -359,11 +378,12 @@ def main():
     total_cost = (s["abs_slip"].mean() + s["fee"].abs().mean()) * 100
     print("  Total cost:      {:.2f}c/trade".format(total_cost))
 
-    # Cost as % of avg PnL for winners
     winners = s.filter(pl.col("result") == "WIN")
     if winners.height > 0:
         avg_win_pnl = winners["pnl_taker"].mean()
-        print("  Cost as % of avg win: {:.1f}%".format(total_cost / (avg_win_pnl / winners["filled_size"].mean()) * 100 / 100))
+        avg_win_size = winners["filled_size"].mean()
+        if avg_win_size > 0:
+            print("  Cost as % of avg win: {:.1f}%".format(total_cost / (avg_win_pnl / avg_win_size) * 100 / 100))
 
     # ══════════════════════════════════════════════════════════════
     section(10, "WORST TRADES DEEP DIVE")
@@ -383,13 +403,12 @@ def main():
             row["outcome"],
         ))
 
-    # Common patterns in worst trades
     print("\n  {}Patterns in worst 20 trades:{}".format(BOLD, RST))
-    w20 = s.sort("pnl_taker").head(20)
+    w20 = s.sort("pnl_taker").head(min(20, s.height))
     avg_entry_w = w20["fill_price"].mean() * 100
     avg_time_w = w20["time_remaining"].mean()
     avg_imp_w = w20["abs_imp"].mean()
-    no_pct = w20.filter(pl.col("direction") == "NO").height / 20 * 100
+    no_pct = w20.filter(pl.col("direction") == "NO").height / w20.height * 100
     print("    Avg entry: {:.0f}c | Avg T-remaining: {:.0f}s | Avg impulse: {:.0f}bp | NO%: {:.0f}%".format(
         avg_entry_w, avg_time_w, avg_imp_w, no_pct
     ))
@@ -413,11 +432,11 @@ def main():
         ))
 
     print("\n  {}Patterns in best 20 trades:{}".format(BOLD, RST))
-    b20 = s.sort("pnl_taker", descending=True).head(20)
+    b20 = s.sort("pnl_taker", descending=True).head(min(20, s.height))
     avg_entry_b = b20["fill_price"].mean() * 100
     avg_time_b = b20["time_remaining"].mean()
     avg_imp_b = b20["abs_imp"].mean()
-    no_pct_b = b20.filter(pl.col("direction") == "NO").height / 20 * 100
+    no_pct_b = b20.filter(pl.col("direction") == "NO").height / b20.height * 100
     print("    Avg entry: {:.0f}c | Avg T-remaining: {:.0f}s | Avg impulse: {:.0f}bp | NO%: {:.0f}%".format(
         avg_entry_b, avg_time_b, avg_imp_b, no_pct_b
     ))
@@ -493,21 +512,20 @@ def main():
                                 "n": n, "wr": wr, "avg": avg, "total": total,
                             })
 
-    # Sort by avg PnL
     best_filters.sort(key=lambda x: x["avg"], reverse=True)
 
-    print("  {}{:>10} {:>10} {:>6} {:>5} {:>6} {:>8} {:>9}{}".format(
-        DIM, "Entry", "Time", "ImpCap", "N", "Win%", "AvgPnL", "Total", RST
-    ))
-    divider()
-    for f in best_filters[:15]:
-        print("  {:>10} {:>10} {:>6} {:>5} {} {:>8} {:>9}".format(
-            f["entry"], f["time"], f["imp_cap"],
-            f["n"], cwr(f["wr"]),
-            cpnl(f["avg"], "+.1f"), cpnl(f["total"]),
-        ))
-
     if best_filters:
+        print("  {}{:>10} {:>10} {:>6} {:>5} {:>6} {:>8} {:>9}{}".format(
+            DIM, "Entry", "Time", "ImpCap", "N", "Win%", "AvgPnL", "Total", RST
+        ))
+        divider()
+        for f in best_filters[:15]:
+            print("  {:>10} {:>10} {:>6} {:>5} {} {:>8} {:>9}".format(
+                f["entry"], f["time"], f["imp_cap"],
+                f["n"], cwr(f["wr"]),
+                cpnl(f["avg"], "+.1f"), cpnl(f["total"]),
+            ))
+
         top = best_filters[0]
         print("\n  {}RECOMMENDED FILTERS:{}".format(BOLD, RST))
         print("    Entry: {}  Time: {}  Impulse cap: {}".format(
@@ -516,30 +534,33 @@ def main():
         print("    {} trades | {} win | {} avg | {} total".format(
             top["n"], cwr(top["wr"]), cpnl(top["avg"], "+.1f"), cpnl(top["total"]),
         ))
+    else:
+        print("  Not enough trades for filter optimization.")
 
     # ══════════════════════════════════════════════════════════════
-    section(15, "CHARTS")
+    section(15, "CHARTS — {}".format(session_name))
     # ══════════════════════════════════════════════════════════════
 
-    # Chart 1: Cumulative PnL per combo (top 4)
-    top4 = sorted(combo_stats.items(), key=lambda x: x[1]["pnl_tk"], reverse=True)[:4]
+    colors_list = ["#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e"]
+
+    # Chart 1: Cumulative PnL per combo
+    top_combos = sorted(combo_stats.items(), key=lambda x: x[1]["pnl_tk"], reverse=True)[:6]
     fig, ax = plt.subplots(figsize=(14, 6))
-    colors_list = ["#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#9b59b6"]
-    for i, (combo, _) in enumerate(top4):
+    for i, (combo, _) in enumerate(top_combos):
         c = s.filter(pl.col("combo") == combo).sort("timestamp")
         cum = np.cumsum(c["pnl_taker"].to_list())
         ax.plot(cum, label="{} (${:+,.0f})".format(combo, cum[-1]),
-                linewidth=1.5, color=colors_list[i])
+                linewidth=1.5, color=colors_list[i % len(colors_list)])
     ax.axhline(0, color="gray", linewidth=0.5)
     ax.set_xlabel("Trade #")
     ax.set_ylabel("Cumulative PnL ($)")
-    ax.set_title("Cumulative Taker PnL — Top 4 Combos")
-    ax.legend()
+    ax.set_title("{} — Cumulative Taker PnL by Combo".format(session_name))
+    ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    fig.savefig(OUTPUT_DIR / "paper_cum_pnl.png", dpi=150)
+    fig.savefig(output_dir / "cum_pnl.png", dpi=150)
     plt.close(fig)
-    print("  Saved output/paper_cum_pnl.png")
+    print("  Saved {}".format(output_dir / "cum_pnl.png"))
 
     # Chart 2: Entry price — win rate and PnL
     fig2, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
@@ -557,17 +578,17 @@ def main():
         ax1.bar(labels, wrs, color=colors_wr)
         ax1.axhline(50, color="red", linewidth=0.5, linestyle="--")
         ax1.set_ylabel("Win Rate (%)")
-        ax1.set_title("Win Rate by Entry Price")
+        ax1.set_title("{} — Win Rate by Entry Price".format(session_name))
         ax1.set_xlabel("Entry Price (cents)")
         ax2.bar(labels, pnls, color=colors_pnl)
         ax2.axhline(0, color="gray", linewidth=0.5)
         ax2.set_ylabel("Total PnL ($)")
-        ax2.set_title("PnL by Entry Price")
+        ax2.set_title("{} — PnL by Entry Price".format(session_name))
         ax2.set_xlabel("Entry Price (cents)")
     plt.tight_layout()
-    fig2.savefig(OUTPUT_DIR / "paper_entry_analysis.png", dpi=150)
+    fig2.savefig(output_dir / "entry_analysis.png", dpi=150)
     plt.close(fig2)
-    print("  Saved output/paper_entry_analysis.png")
+    print("  Saved {}".format(output_dir / "entry_analysis.png"))
 
     # Chart 3: Time remaining — win rate and PnL
     fig3, (ax3, ax4) = plt.subplots(1, 2, figsize=(14, 5))
@@ -585,56 +606,316 @@ def main():
         ax3.bar(labels, wrs, color=colors_wr)
         ax3.axhline(50, color="red", linewidth=0.5, linestyle="--")
         ax3.set_ylabel("Win Rate (%)")
-        ax3.set_title("Win Rate by Time Remaining")
+        ax3.set_title("{} — Win Rate by Time Remaining".format(session_name))
         ax4.bar(labels, pnls, color=colors_pnl)
         ax4.axhline(0, color="gray", linewidth=0.5)
         ax4.set_ylabel("Total PnL ($)")
-        ax4.set_title("PnL by Time Remaining")
+        ax4.set_title("{} — PnL by Time Remaining".format(session_name))
     plt.tight_layout()
-    fig3.savefig(OUTPUT_DIR / "paper_time_analysis.png", dpi=150)
+    fig3.savefig(output_dir / "time_analysis.png", dpi=150)
     plt.close(fig3)
-    print("  Saved output/paper_time_analysis.png")
+    print("  Saved {}".format(output_dir / "time_analysis.png"))
 
     # Chart 4: Per-window PnL bar chart
     fig4, ax5 = plt.subplots(figsize=(16, 5))
-    wpnls = [r[4] for r in win_results]
+    wpnls = [r[4] for r in sorted(win_results, key=lambda x: x[0])]
     colors_w = ["#2ecc71" if p >= 0 else "#e74c3c" for p in wpnls]
     ax5.bar(range(len(wpnls)), wpnls, color=colors_w, width=0.8)
     ax5.axhline(0, color="gray", linewidth=0.5)
     ax5.set_xlabel("Window #")
     ax5.set_ylabel("PnL ($)")
-    ax5.set_title("PnL per Window (all combos combined)")
+    ax5.set_title("{} — PnL per Window".format(session_name))
     ax5.grid(True, alpha=0.2, axis="y")
     plt.tight_layout()
-    fig4.savefig(OUTPUT_DIR / "paper_window_pnl.png", dpi=150)
+    fig4.savefig(output_dir / "window_pnl.png", dpi=150)
     plt.close(fig4)
-    print("  Saved output/paper_window_pnl.png")
+    print("  Saved {}".format(output_dir / "window_pnl.png"))
 
-    # Chart 5: Rolling win rate (all trades combined)
+    # Chart 5: Rolling win rate
     all_wins = (s.sort("timestamp")["result"] == "WIN").to_list()
-    if len(all_wins) >= 50:
+    if len(all_wins) >= 20:
         wins_arr = np.array([1.0 if w else 0.0 for w in all_wins])
-        window_size = min(50, len(wins_arr) // 3)
-        if window_size >= 10:
-            rolling = np.convolve(wins_arr, np.ones(window_size) / window_size, mode="valid")
-            fig5, ax6 = plt.subplots(figsize=(14, 5))
-            ax6.plot(rolling * 100, linewidth=1, color="steelblue")
-            ax6.axhline(50, color="red", linewidth=0.5, linestyle="--", label="50%")
-            ax6.axhline(65, color="green", linewidth=0.5, linestyle="--", label="65%")
-            ax6.set_xlabel("Trade #")
-            ax6.set_ylabel("Win Rate (%)")
-            ax6.set_title("Rolling {}-Trade Win Rate (All Combos)".format(window_size))
-            ax6.legend()
-            ax6.grid(True, alpha=0.3)
-            ax6.set_ylim(20, 100)
-            plt.tight_layout()
-            fig5.savefig(OUTPUT_DIR / "paper_rolling_wr.png", dpi=150)
-            plt.close(fig5)
-            print("  Saved output/paper_rolling_wr.png")
+        window_size = min(50, max(10, len(wins_arr) // 3))
+        rolling = np.convolve(wins_arr, np.ones(window_size) / window_size, mode="valid")
+        fig5, ax6 = plt.subplots(figsize=(14, 5))
+        ax6.plot(rolling * 100, linewidth=1, color="steelblue")
+        ax6.axhline(50, color="red", linewidth=0.5, linestyle="--", label="50%")
+        ax6.axhline(65, color="green", linewidth=0.5, linestyle="--", label="65%")
+        ax6.set_xlabel("Trade #")
+        ax6.set_ylabel("Win Rate (%)")
+        ax6.set_title("{} — Rolling {}-Trade Win Rate".format(session_name, window_size))
+        ax6.legend()
+        ax6.grid(True, alpha=0.3)
+        ax6.set_ylim(20, 100)
+        plt.tight_layout()
+        fig5.savefig(output_dir / "rolling_wr.png", dpi=150)
+        plt.close(fig5)
+        print("  Saved {}".format(output_dir / "rolling_wr.png"))
+
+    # Return session summary for cross-session comparison
+    total_pnl = s["pnl_taker"].sum()
+    total_wins = s.filter(pl.col("result") == "WIN").height
+    return {
+        "name": session_name,
+        "n_trades": n_trades,
+        "n_windows": n_windows,
+        "hours": hours,
+        "pnl": total_pnl,
+        "wr": total_wins / n_trades * 100,
+        "avg_pnl": total_pnl / n_trades,
+        "combo_stats": combo_stats,
+        "df": s,
+    }
+
+
+def cross_session_comparison(session_summaries):
+    """Generate cross-session comparison charts and text output."""
+    if len(session_summaries) < 2:
+        return
+
+    output_dir = Path("output/comparison")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Sort by PnL
+    ranked = sorted(session_summaries, key=lambda x: x["pnl"], reverse=True)
+
+    print("\n\n{}{}{}".format(M, "=" * 70, RST))
+    print("{}{}  CROSS-SESSION COMPARISON — {} SESSIONS  {}".format(
+        BOLD, M, len(ranked), RST
+    ))
+    print("{}{}{}".format(M, "=" * 70, RST))
+
+    # ── Leaderboard ──────────────────────────────────────────
+    print("\n{}{}  LEADERBOARD  {}".format(BOLD, W, RST))
+    print("  {}{:>2} {:>22} {:>6} {:>6} {:>10} {:>8} {:>6}{}".format(
+        DIM, "#", "Session", "Trades", "Win%", "PnL", "$/trade", "Hours", RST
+    ))
+    print("  {}{}{}".format(DIM, "-" * 70, RST))
+
+    for i, ss in enumerate(ranked):
+        rank_color = G if i == 0 else Y if i <= 2 else ""
+        print("  {}{:>2}{} {:>22} {:>6} {} {:>10} {:>8} {:>5.1f}h".format(
+            rank_color, i + 1, RST,
+            ss["name"], ss["n_trades"], cwr(ss["wr"]),
+            cpnl(ss["pnl"]), cpnl(ss["avg_pnl"], "+.1f"), ss["hours"],
+        ))
+
+    # ── Per-session combo details ────────────────────────────
+    print("\n{}{}  PER-SESSION COMBO DETAILS  {}".format(BOLD, W, RST))
+    for ss in ranked:
+        print("\n  {}{}{} ({} trades, {}):".format(
+            C, ss["name"], RST, ss["n_trades"], cpnl(ss["pnl"])
+        ))
+        for combo, cs in sorted(ss["combo_stats"].items(), key=lambda x: x[1]["pnl_tk"], reverse=True):
+            print("    {:>12}: {:>3} trades  {}  {}  maxDD: {}".format(
+                combo, cs["n"], cwr(cs["wr"]), cpnl(cs["pnl_tk"]),
+                cpnl(-cs["dd"]),
+            ))
+
+    # ── Best combos across ALL sessions ──────────────────────
+    print("\n{}{}  BEST COMBOS ACROSS ALL SESSIONS  {}".format(BOLD, W, RST))
+    all_combos = {}
+    for ss in ranked:
+        for combo, cs in ss["combo_stats"].items():
+            key = "{}::{}".format(ss["name"], combo)
+            all_combos[key] = {
+                "session": ss["name"], "combo": combo,
+                "n": cs["n"], "wr": cs["wr"], "pnl": cs["pnl_tk"],
+                "avg_pnl": cs["avg_pnl"], "dd": cs["dd"],
+            }
+    best_combos = sorted(all_combos.values(), key=lambda x: x["pnl"], reverse=True)
+
+    print("  {}{:>22} {:>12} {:>5} {:>6} {:>9} {:>8} {:>7}{}".format(
+        DIM, "Session", "Combo", "N", "Win%", "PnL", "$/trade", "MaxDD", RST
+    ))
+    print("  {}{}{}".format(DIM, "-" * 74, RST))
+    for c in best_combos[:20]:
+        print("  {:>22} {:>12} {:>5} {} {:>9} {:>8} {:>7}".format(
+            c["session"], c["combo"], c["n"], cwr(c["wr"]),
+            cpnl(c["pnl"]), cpnl(c["avg_pnl"], "+.1f"), cpnl(-c["dd"]),
+        ))
+
+    # ══════════════════════════════════════════════════════════
+    # COMPARISON CHARTS
+    # ══════════════════════════════════════════════════════════
+    print("\n{}{}  COMPARISON CHARTS  {}".format(BOLD, W, RST))
+
+    colors_list = [
+        "#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#9b59b6",
+        "#1abc9c", "#e67e22", "#34495e", "#16a085", "#c0392b",
+    ]
+
+    # Chart 1: ALL sessions cumulative PnL overlay
+    fig, ax = plt.subplots(figsize=(16, 8))
+    for i, ss in enumerate(ranked):
+        df = ss["df"].sort("timestamp")
+        cum = np.cumsum(df["pnl_taker"].to_list())
+        ax.plot(range(len(cum)), cum,
+                label="{} (${:+,.0f}, {:.0f}%)".format(ss["name"], ss["pnl"], ss["wr"]),
+                linewidth=2, color=colors_list[i % len(colors_list)])
+    ax.axhline(0, color="gray", linewidth=0.8, linestyle="--")
+    ax.set_xlabel("Trade # (per session)", fontsize=12)
+    ax.set_ylabel("Cumulative PnL ($)", fontsize=12)
+    ax.set_title("ALL SESSIONS — Cumulative PnL Comparison", fontsize=14, fontweight="bold")
+    ax.legend(fontsize=9, loc="best")
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    fig.savefig(output_dir / "all_sessions_cum_pnl.png", dpi=150)
+    plt.close(fig)
+    print("  Saved {}".format(output_dir / "all_sessions_cum_pnl.png"))
+
+    # Chart 2: Session leaderboard — PnL bar chart
+    fig2, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
+    names = [ss["name"] for ss in ranked]
+    pnls = [ss["pnl"] for ss in ranked]
+    wrs = [ss["wr"] for ss in ranked]
+    bar_colors_pnl = ["#2ecc71" if p >= 0 else "#e74c3c" for p in pnls]
+    bar_colors_wr = ["#2ecc71" if w >= 65 else "#f39c12" if w >= 55 else "#e74c3c" for w in wrs]
+
+    bars1 = ax1.barh(names[::-1], pnls[::-1], color=bar_colors_pnl[::-1])
+    ax1.axvline(0, color="gray", linewidth=0.5)
+    ax1.set_xlabel("Total PnL ($)")
+    ax1.set_title("Total PnL by Session", fontsize=13, fontweight="bold")
+    for bar, val in zip(bars1, pnls[::-1]):
+        ax1.text(bar.get_width() + (max(pnls) - min(pnls)) * 0.02 * (1 if val >= 0 else -1),
+                 bar.get_y() + bar.get_height() / 2,
+                 "${:+,.0f}".format(val), va="center", fontsize=9, fontweight="bold")
+
+    bars2 = ax2.barh(names[::-1], wrs[::-1], color=bar_colors_wr[::-1])
+    ax2.axvline(50, color="red", linewidth=0.8, linestyle="--", label="50%")
+    ax2.axvline(65, color="green", linewidth=0.8, linestyle="--", label="65%")
+    ax2.set_xlabel("Win Rate (%)")
+    ax2.set_title("Win Rate by Session", fontsize=13, fontweight="bold")
+    ax2.legend()
+    for bar, val in zip(bars2, wrs[::-1]):
+        ax2.text(bar.get_width() + 1, bar.get_y() + bar.get_height() / 2,
+                 "{:.1f}%".format(val), va="center", fontsize=9, fontweight="bold")
+
+    plt.tight_layout()
+    fig2.savefig(output_dir / "session_leaderboard.png", dpi=150)
+    plt.close(fig2)
+    print("  Saved {}".format(output_dir / "session_leaderboard.png"))
+
+    # Chart 3: $/trade comparison (the real quality metric)
+    fig3, ax3 = plt.subplots(figsize=(14, 7))
+    avg_pnls = [ss["avg_pnl"] for ss in ranked]
+    trades = [ss["n_trades"] for ss in ranked]
+    bar_colors = ["#2ecc71" if p >= 0 else "#e74c3c" for p in avg_pnls]
+    bars = ax3.barh(names[::-1], avg_pnls[::-1], color=bar_colors[::-1])
+    ax3.axvline(0, color="gray", linewidth=0.5)
+    ax3.set_xlabel("Avg PnL per Trade ($)")
+    ax3.set_title("Average PnL per Trade by Session", fontsize=13, fontweight="bold")
+    for bar, val, nt in zip(bars, avg_pnls[::-1], trades[::-1]):
+        ax3.text(bar.get_width() + (max(avg_pnls) - min(avg_pnls)) * 0.02 * (1 if val >= 0 else -1),
+                 bar.get_y() + bar.get_height() / 2,
+                 "${:+.1f} (n={})".format(val, nt), va="center", fontsize=9)
+    plt.tight_layout()
+    fig3.savefig(output_dir / "avg_pnl_per_trade.png", dpi=150)
+    plt.close(fig3)
+    print("  Saved {}".format(output_dir / "avg_pnl_per_trade.png"))
+
+    # Chart 4: All combos across all sessions — scatter (win rate vs avg PnL, sized by N)
+    fig4, ax4 = plt.subplots(figsize=(14, 8))
+    for i, ss in enumerate(ranked):
+        for combo, cs in ss["combo_stats"].items():
+            if cs["n"] >= 5:
+                color = colors_list[i % len(colors_list)]
+                ax4.scatter(cs["wr"], cs["avg_pnl"],
+                           s=cs["n"] * 3, color=color, alpha=0.7, edgecolors="white", linewidth=0.5)
+                ax4.annotate("{}\n{}".format(ss["name"][:8], combo[:8]),
+                            (cs["wr"], cs["avg_pnl"]),
+                            fontsize=6, ha="center", va="bottom", alpha=0.8)
+    ax4.axhline(0, color="gray", linewidth=0.5, linestyle="--")
+    ax4.axvline(50, color="red", linewidth=0.5, linestyle="--")
+    ax4.set_xlabel("Win Rate (%)", fontsize=12)
+    ax4.set_ylabel("Avg PnL per Trade ($)", fontsize=12)
+    ax4.set_title("All Combos Across All Sessions (size = trade count)", fontsize=13, fontweight="bold")
+    # Add legend for sessions
+    from matplotlib.lines import Line2D
+    legend_elements = [Line2D([0], [0], marker='o', color='w',
+                              markerfacecolor=colors_list[i % len(colors_list)],
+                              markersize=8, label=ss["name"])
+                      for i, ss in enumerate(ranked)]
+    ax4.legend(handles=legend_elements, fontsize=8, loc="best")
+    ax4.grid(True, alpha=0.3)
+    plt.tight_layout()
+    fig4.savefig(output_dir / "combo_scatter.png", dpi=150)
+    plt.close(fig4)
+    print("  Saved {}".format(output_dir / "combo_scatter.png"))
+
+    # Chart 5: Time-aligned cumulative PnL (by window start, not trade count)
+    fig5, ax5 = plt.subplots(figsize=(16, 8))
+    for i, ss in enumerate(ranked):
+        df = ss["df"].sort("timestamp")
+        timestamps = df["timestamp"].to_list()
+        pnls_list = df["pnl_taker"].to_list()
+        cum = np.cumsum(pnls_list)
+        # Convert to hours since first trade
+        t0 = min(timestamps)
+        hours_arr = [(t - t0) / 3600 for t in timestamps]
+        ax5.plot(hours_arr, cum,
+                label="{} (${:+,.0f})".format(ss["name"], ss["pnl"]),
+                linewidth=1.5, color=colors_list[i % len(colors_list)])
+    ax5.axhline(0, color="gray", linewidth=0.8, linestyle="--")
+    ax5.set_xlabel("Hours Since Start", fontsize=12)
+    ax5.set_ylabel("Cumulative PnL ($)", fontsize=12)
+    ax5.set_title("ALL SESSIONS — Time-Aligned PnL", fontsize=14, fontweight="bold")
+    ax5.legend(fontsize=9, loc="best")
+    ax5.grid(True, alpha=0.3)
+    plt.tight_layout()
+    fig5.savefig(output_dir / "time_aligned_pnl.png", dpi=150)
+    plt.close(fig5)
+    print("  Saved {}".format(output_dir / "time_aligned_pnl.png"))
 
     print("\n{}{}{}".format(M, "=" * 70, RST))
-    print("  Run: {}python analyze_paper.py{} after each session".format(BOLD, RST))
+    print("  {}WINNER: {}{}{}  |  {} trades  |  {}  |  {} avg".format(
+        BOLD, G, ranked[0]["name"], RST,
+        ranked[0]["n_trades"], cpnl(ranked[0]["pnl"]),
+        cpnl(ranked[0]["avg_pnl"], "+.1f"),
+    ))
     print("{}{}{}".format(M, "=" * 70, RST))
+
+
+def main():
+    analyze_all = os.environ.get("ANALYZE_ALL", "").strip()
+
+    if analyze_all == "1":
+        # Multi-session mode: analyze each independently, then compare
+        csvs = find_all_session_csvs()
+        if not csvs:
+            print("No session CSVs found in data/")
+            return
+
+        summaries = []
+        for session_name, csv_path in sorted(csvs.items()):
+            # Skip old/archive dirs
+            if session_name in ("_archive_20260403", "wide-entry", "tight-filters"):
+                continue
+            lines = sum(1 for _ in open(csv_path)) - 1
+            if lines < 1:
+                continue
+
+            print("\n{}{}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}".format(BOLD, C, RST))
+            print("{}{}  SESSION: {} ({} trades)  {}".format(BOLD, C, session_name, lines, RST))
+            print("{}{}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}".format(BOLD, C, RST))
+
+            out_dir = Path("output") / session_name
+            result = analyze_session(csv_path, session_name, out_dir)
+            if result:
+                summaries.append(result)
+
+        # Cross-session comparison
+        if summaries:
+            cross_session_comparison(summaries)
+
+    else:
+        # Single session mode
+        csv_path = find_csv()
+        session_name = os.environ.get("ANALYZE_SESSION", csv_path.parent.name)
+        if session_name in ("data", "."):
+            session_name = "default"
+        out_dir = Path("output") / session_name
+        analyze_session(csv_path, session_name, out_dir)
 
 
 if __name__ == "__main__":

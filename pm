@@ -136,7 +136,15 @@ stop|x)
 # ── Logs ──────────────────────────────────────────────────
 logs|l)
     NAME="${1:-default}"
-    ./scripts/logs.sh "$NAME"
+    # Check if running locally first
+    if pgrep -qf "paper_trade_v2.py.*--instance ${NAME}" 2>/dev/null; then
+        echo -e "${G}Tailing local: ${NAME}${RST}"
+        tail -f "data/${NAME}.log"
+    else
+        echo -e "${C}Tailing VPS: ${NAME}${RST}"
+        source .env 2>/dev/null || true
+        ssh ${VPS_USER:-root}@${VPS_HOST:-167.172.50.38} "tail -f /var/log/polymarket-bot/${NAME}.log"
+    fi
     ;;
 
 # ── Status ────────────────────────────────────────────────
