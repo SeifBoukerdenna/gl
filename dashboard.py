@@ -16,18 +16,18 @@ CONFIGS_DIR = Path("configs")
 DATA_DIR = Path("data")
 
 KNOB_DEFS = {
-    "BASE_TRADE_DOLLARS": {"default": 100, "desc": "$ per trade", "min": 1, "max": 10000, "step": 10},
-    "MAX_SHARES": {"default": 500, "desc": "Max shares", "min": 5, "max": 10000, "step": 50},
+    "BASE_TRADE_DOLLARS": {"default": 100, "desc": "$ per trade", "min": 1, "max": 10000, "step": 1},
+    "MAX_SHARES": {"default": 500, "desc": "Max shares", "min": 5, "max": 10000, "step": 1},
     "MAX_RISK_PCT": {"default": 0.10, "desc": "Max risk %", "min": 0.01, "max": 1.0, "step": 0.01},
-    "STARTING_BANKROLL": {"default": 1000, "desc": "Starting $", "min": 10, "max": 1000000, "step": 100},
-    "MIN_ENTRY_PRICE": {"default": 0.20, "desc": "Min entry", "min": 0.01, "max": 0.99, "step": 0.05},
-    "MAX_ENTRY_PRICE": {"default": 0.80, "desc": "Max entry", "min": 0.01, "max": 0.99, "step": 0.05},
-    "DOWN_MIN_ENTRY": {"default": 0.25, "desc": "DOWN floor", "min": 0.01, "max": 0.99, "step": 0.05},
-    "MAX_IMPULSE_BP": {"default": 25, "desc": "Max impulse bp", "min": 1, "max": 200, "step": 5},
-    "DEAD_ZONE_START": {"default": 90, "desc": "Dead zone start (s)", "min": 0, "max": 300, "step": 10},
-    "DEAD_ZONE_END": {"default": 210, "desc": "Dead zone end (s)", "min": 0, "max": 300, "step": 10},
-    "COOLDOWN_RANGE_BP": {"default": 50, "desc": "Cooldown range bp", "min": 5, "max": 500, "step": 10},
-    "COOLDOWN_DURATION": {"default": 120, "desc": "Cooldown sec", "min": 0, "max": 3600, "step": 30},
+    "STARTING_BANKROLL": {"default": 1000, "desc": "Starting $", "min": 10, "max": 1000000, "step": 1},
+    "MIN_ENTRY_PRICE": {"default": 0.20, "desc": "Min entry", "min": 0.01, "max": 0.99, "step": 0.01},
+    "MAX_ENTRY_PRICE": {"default": 0.80, "desc": "Max entry", "min": 0.01, "max": 0.99, "step": 0.01},
+    "DOWN_MIN_ENTRY": {"default": 0.25, "desc": "DOWN floor", "min": 0.01, "max": 0.99, "step": 0.01},
+    "MAX_IMPULSE_BP": {"default": 25, "desc": "Max impulse bp", "min": 1, "max": 200, "step": 1},
+    "DEAD_ZONE_START": {"default": 90, "desc": "Dead zone start (s)", "min": 0, "max": 300, "step": 1},
+    "DEAD_ZONE_END": {"default": 210, "desc": "Dead zone end (s)", "min": 0, "max": 300, "step": 1},
+    "COOLDOWN_RANGE_BP": {"default": 50, "desc": "Cooldown range bp", "min": 5, "max": 500, "step": 1},
+    "COOLDOWN_DURATION": {"default": 120, "desc": "Cooldown sec", "min": 0, "max": 3600, "step": 1},
 }
 
 
@@ -147,7 +147,14 @@ def get_all_sessions():
             CSV="/opt/polymarket-bot/data/${INST}/trades.csv"; [ ! -f "$CSV" ] && CSV="/opt/polymarket-bot/data/${INST}/paper_trades_v2.csv"
             [ ! -f "$CSV" ] && CSV="/opt/polymarket-bot/data/paper_trades_v2.csv"
             N=0; W=0; P=0
-            if [ -f "$CSV" ]; then N=$(tail -n +2 "$CSV" 2>/dev/null|wc -l|tr -d ' '); W=$(tail -n +2 "$CSV" 2>/dev/null|awk -F',' '{print $NF}'|grep -c WIN||echo 0); P=$(tail -n +2 "$CSV" 2>/dev/null|awk -F',' '{s+=$22}END{printf "%.0f",s}'||echo 0); fi
+            if [ -f "$CSV" ]; then
+                HEADER=$(head -1 "$CSV"|tr -d ' ')
+                PNLCOL=$(echo "$HEADER"|tr ',' '\n'|grep -n 'pnl_taker'|cut -d: -f1)
+                RESCOL=$(echo "$HEADER"|tr ',' '\n'|grep -n 'result'|cut -d: -f1)
+                N=$(tail -n +2 "$CSV" 2>/dev/null|wc -l|tr -d ' ')
+                [ -n "$RESCOL" ] && W=$(tail -n +2 "$CSV" 2>/dev/null|cut -d, -f$RESCOL|tr -d ' '|grep -c WIN||echo 0)
+                [ -n "$PNLCOL" ] && P=$(tail -n +2 "$CSV" 2>/dev/null|cut -d, -f$PNLCOL|tr -d ' '|awk '{s+=$1}END{printf "%.0f",s}'||echo 0)
+            fi
             echo "${INST}|${ST}|${N}|${W}|${P}"
         done
     """)
@@ -292,7 +299,7 @@ HOME = CSS + """
 <strong>{{c.name}}</strong>{% if c.name=='default' %} <span class="tag tag-a" style="font-size:.6em">DEFAULT</span>{% endif %}
 <div class="d" style="font-size:.8em;margin:3px 0 8px">{{c.desc}}</div>
 <div style="font-size:.72em;color:var(--dim);display:flex;gap:8px;flex-wrap:wrap">
-<span style="background:var(--bg);padding:1px 6px;border-radius:3px">{{(c.data.get('MIN_ENTRY_PRICE',.2)*100)|int}}-{{(c.data.get('MAX_ENTRY_PRICE',.8)*100)|int}}¢</span>
+<span style="background:var(--bg);padding:1px 6px;border-radius:3px">{{(c.data.get('MIN_ENTRY_PRICE',0.2)*100)|int}}-{{(c.data.get('MAX_ENTRY_PRICE',0.8)*100)|int}}¢</span>
 <span style="background:var(--bg);padding:1px 6px;border-radius:3px">&lt;{{c.data.get('MAX_IMPULSE_BP','?')}}bp</span>
 <span style="background:var(--bg);padding:1px 6px;border-radius:3px">DZ {{c.data.get('DEAD_ZONE_START','?')}}-{{c.data.get('DEAD_ZONE_END','?')}}s</span>
 </div>
@@ -314,7 +321,7 @@ SESSION = CSS + """
 <div class="c">
 <div class="top">
 <h1><a href="/" style="color:var(--dim);-webkit-text-fill-color:var(--dim)">←</a> {{name}} {% if d.get('window_active') %}<span class="tag tag-a">LIVE</span>{% endif %}</h1>
-<div class="r"><a href="/edit/{{name}}" class="btn">Config</a><a href="/session/{{name}}" class="btn">↻</a></div>
+<div class="r"><a href="/logs/{{name}}" class="btn">Logs</a><a href="/edit/{{name}}" class="btn">Config</a><a href="/session/{{name}}" class="btn">↻</a></div>
 </div>
 {% if d.get('btc_price') %}
 <div class="card live" style="margin-bottom:16px">
@@ -589,6 +596,26 @@ def stop_session(where, name):
         flash("✓ Stopping VPS: " + name)
     time.sleep(2)
     return redirect("/")
+
+
+@app.route("/logs/<name>")
+def view_logs(name):
+    # Try VPS logs
+    lines = ssh_cmd("tail -80 /var/log/polymarket-bot/{}.log 2>/dev/null || tail -80 /opt/polymarket-bot/data/{}.log 2>/dev/null".format(name, name))
+    if not lines.strip():
+        # Try local
+        for p in [Path("data/{}.log".format(name)), Path("data/{}/bot.log".format(name))]:
+            if p.exists():
+                lines = p.read_text()[-8000:]  # last ~8KB
+                break
+    if not lines.strip():
+        lines = "No logs found for '{}'".format(name)
+    return render_template_string(CSS + """
+<div class="c">
+<div class="top"><h1><a href="/session/{{name}}" style="color:var(--dim);-webkit-text-fill-color:var(--dim)">← {{name}}</a> / Logs</h1>
+<div class="r"><a href="/logs/{{name}}" class="btn">↻ Refresh</a></div></div>
+<pre style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:.78em;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:80vh;overflow-y:auto;line-height:1.5">{{logs}}</pre>
+</div>""", name=name, logs=lines)
 
 
 @app.route("/api/sessions")
