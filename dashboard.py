@@ -17,25 +17,73 @@ DATA_DIR = Path("data")
 
 # All tunable knobs with descriptions and defaults
 KNOB_DEFS = {
-    "BASE_TRADE_DOLLARS": {"default": 100, "desc": "Dollar amount per trade", "type": "number", "step": 10},
-    "MAX_SHARES": {"default": 500, "desc": "Maximum shares per trade", "type": "number", "step": 50},
-    "MAX_RISK_PCT": {"default": 0.10, "desc": "Max % of bankroll per trade", "type": "number", "step": 0.01},
-    "MIN_SHARES": {"default": 10, "desc": "Minimum shares per trade", "type": "number", "step": 5},
-    "STARTING_BANKROLL": {"default": 1000, "desc": "Starting $ per combo", "type": "number", "step": 100},
-    "MIN_ENTRY_PRICE": {"default": 0.20, "desc": "Don't buy below this (0-1)", "type": "number", "step": 0.05},
-    "MAX_ENTRY_PRICE": {"default": 0.80, "desc": "Don't buy above this (0-1)", "type": "number", "step": 0.05},
-    "DOWN_MIN_ENTRY": {"default": 0.25, "desc": "Extra floor for BUY DOWN trades", "type": "number", "step": 0.05},
-    "MAX_IMPULSE_BP": {"default": 25, "desc": "Skip if BTC moved > this many bp", "type": "number", "step": 5},
-    "MAX_SPREAD": {"default": 0.03, "desc": "Skip if PM spread > this", "type": "number", "step": 0.01},
-    "MIN_BOOK_LEVELS": {"default": 3, "desc": "Min order book depth", "type": "number", "step": 1},
-    "DEAD_ZONE_START": {"default": 90, "desc": "Dead zone start (seconds remaining)", "type": "number", "step": 10},
-    "DEAD_ZONE_END": {"default": 210, "desc": "Dead zone end (seconds remaining)", "type": "number", "step": 10},
-    "WINDOW_BUFFER_START": {"default": 10, "desc": "Skip first N seconds of window", "type": "number", "step": 5},
-    "WINDOW_BUFFER_END": {"default": 10, "desc": "Skip last N seconds of window", "type": "number", "step": 5},
-    "COOLDOWN_RANGE_BP": {"default": 50, "desc": "Pause if window range > this bp", "type": "number", "step": 10},
-    "COOLDOWN_DURATION": {"default": 120, "desc": "Cooldown duration in seconds", "type": "number", "step": 30},
-    "PRINT_STATUS_INTERVAL": {"default": 15, "desc": "Status line every N seconds", "type": "number", "step": 5},
+    "BASE_TRADE_DOLLARS": {"default": 100, "desc": "Dollar amount per trade", "type": "number", "step": 10, "min": 1, "max": 10000},
+    "MAX_SHARES": {"default": 500, "desc": "Maximum shares per trade", "type": "number", "step": 50, "min": 5, "max": 10000},
+    "MAX_RISK_PCT": {"default": 0.10, "desc": "Max % of bankroll per trade", "type": "number", "step": 0.01, "min": 0.01, "max": 1.0},
+    "MIN_SHARES": {"default": 10, "desc": "Minimum shares per trade", "type": "number", "step": 5, "min": 1, "max": 1000},
+    "STARTING_BANKROLL": {"default": 1000, "desc": "Starting $ per combo", "type": "number", "step": 100, "min": 10, "max": 1000000},
+    "MIN_ENTRY_PRICE": {"default": 0.20, "desc": "Don't buy below this (0-1)", "type": "number", "step": 0.05, "min": 0.01, "max": 0.99},
+    "MAX_ENTRY_PRICE": {"default": 0.80, "desc": "Don't buy above this (0-1)", "type": "number", "step": 0.05, "min": 0.01, "max": 0.99},
+    "DOWN_MIN_ENTRY": {"default": 0.25, "desc": "Extra floor for BUY DOWN trades", "type": "number", "step": 0.05, "min": 0.01, "max": 0.99},
+    "MAX_IMPULSE_BP": {"default": 25, "desc": "Skip if BTC moved > this many bp", "type": "number", "step": 5, "min": 1, "max": 200},
+    "MAX_SPREAD": {"default": 0.03, "desc": "Skip if PM spread > this", "type": "number", "step": 0.01, "min": 0.005, "max": 0.50},
+    "MIN_BOOK_LEVELS": {"default": 3, "desc": "Min order book depth", "type": "number", "step": 1, "min": 1, "max": 50},
+    "DEAD_ZONE_START": {"default": 90, "desc": "Dead zone start (seconds remaining)", "type": "number", "step": 10, "min": 0, "max": 300},
+    "DEAD_ZONE_END": {"default": 210, "desc": "Dead zone end (seconds remaining)", "type": "number", "step": 10, "min": 0, "max": 300},
+    "WINDOW_BUFFER_START": {"default": 10, "desc": "Skip first N seconds of window", "type": "number", "step": 5, "min": 0, "max": 120},
+    "WINDOW_BUFFER_END": {"default": 10, "desc": "Skip last N seconds of window", "type": "number", "step": 5, "min": 0, "max": 120},
+    "COOLDOWN_RANGE_BP": {"default": 50, "desc": "Pause if window range > this bp", "type": "number", "step": 10, "min": 5, "max": 500},
+    "COOLDOWN_DURATION": {"default": 120, "desc": "Cooldown duration in seconds", "type": "number", "step": 30, "min": 0, "max": 3600},
+    "PRINT_STATUS_INTERVAL": {"default": 15, "desc": "Status line every N seconds", "type": "number", "step": 5, "min": 5, "max": 300},
 }
+
+
+def validate_config(config):
+    """Validate config values. Returns list of error strings (empty = valid)."""
+    errors = []
+
+    # Check each knob against its range
+    for key, meta in KNOB_DEFS.items():
+        if key not in config:
+            continue
+        val = config[key]
+        if not isinstance(val, (int, float)):
+            errors.append("{}: must be a number, got {}".format(key, type(val).__name__))
+            continue
+        if val < meta["min"]:
+            errors.append("{}: {} is below minimum {}".format(key, val, meta["min"]))
+        if val > meta["max"]:
+            errors.append("{}: {} is above maximum {}".format(key, val, meta["max"]))
+
+    # Cross-field validations
+    min_entry = config.get("MIN_ENTRY_PRICE", KNOB_DEFS["MIN_ENTRY_PRICE"]["default"])
+    max_entry = config.get("MAX_ENTRY_PRICE", KNOB_DEFS["MAX_ENTRY_PRICE"]["default"])
+    down_min = config.get("DOWN_MIN_ENTRY", KNOB_DEFS["DOWN_MIN_ENTRY"]["default"])
+    dz_start = config.get("DEAD_ZONE_START", KNOB_DEFS["DEAD_ZONE_START"]["default"])
+    dz_end = config.get("DEAD_ZONE_END", KNOB_DEFS["DEAD_ZONE_END"]["default"])
+    min_shares = config.get("MIN_SHARES", KNOB_DEFS["MIN_SHARES"]["default"])
+    max_shares = config.get("MAX_SHARES", KNOB_DEFS["MAX_SHARES"]["default"])
+    buf_start = config.get("WINDOW_BUFFER_START", KNOB_DEFS["WINDOW_BUFFER_START"]["default"])
+    buf_end = config.get("WINDOW_BUFFER_END", KNOB_DEFS["WINDOW_BUFFER_END"]["default"])
+
+    if min_entry >= max_entry:
+        errors.append("MIN_ENTRY_PRICE ({}) must be less than MAX_ENTRY_PRICE ({})".format(min_entry, max_entry))
+    if down_min < min_entry:
+        errors.append("DOWN_MIN_ENTRY ({}) should be >= MIN_ENTRY_PRICE ({})".format(down_min, min_entry))
+    if dz_start >= dz_end:
+        errors.append("DEAD_ZONE_START ({}) must be less than DEAD_ZONE_END ({})".format(dz_start, dz_end))
+    if min_shares > max_shares:
+        errors.append("MIN_SHARES ({}) must be <= MAX_SHARES ({})".format(min_shares, max_shares))
+    if buf_start + buf_end >= 280:
+        errors.append("WINDOW_BUFFER_START + END ({}) leaves less than 20s of trading".format(buf_start + buf_end))
+
+    # Check for unknown keys
+    known = set(KNOB_DEFS.keys()) | {"_description"}
+    for key in config:
+        if key not in known:
+            errors.append("Unknown key: '{}' — bot will ignore it".format(key))
+
+    return errors
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -250,6 +298,7 @@ textarea { min-height:120px; resize:vertical; }
 .flash { padding:12px 18px; border-radius:8px; margin-bottom:16px; font-size:0.88em;
          background:rgba(52,211,153,0.1); color:var(--green); border:1px solid rgba(52,211,153,0.2);
          animation: flashIn 0.3s ease; }
+.flash-warn { background:rgba(251,191,36,0.1); color:var(--yellow); border-color:rgba(251,191,36,0.3); }
 @keyframes flashIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
 
 /* Knob editor */
@@ -301,7 +350,7 @@ INDEX_HTML = """
 </div>
 
 {% for msg in get_flashed_messages() %}
-<div class="flash">{{ msg }}</div>
+<div class="flash {{ 'flash-warn' if msg.startswith('⚠') else '' }}">{{ msg }}</div>
 {% endfor %}
 
 <!-- Overview Stats -->
@@ -475,7 +524,7 @@ EDIT_HTML = """
     <a href="/" class="btn">Cancel</a>
 </div>
 {% for msg in get_flashed_messages() %}
-<div class="flash">{{ msg }}</div>
+<div class="flash {{ 'flash-warn' if msg.startswith('⚠') else '' }}">{{ msg }}</div>
 {% endfor %}
 <form method="POST" action="{{ '/save/' + name if not is_new else '/create' }}">
     {% if is_new %}
@@ -493,7 +542,9 @@ EDIT_HTML = """
     {% for key, meta in knobs.items() %}
     <div class="knob-row">
         <label>{{ meta.desc }} <span class="dim">({{ key }})</span></label>
-        <input type="{{ meta.type }}" name="{{ key }}" value="{{ config.get(key, meta.default) }}" step="{{ meta.step }}">
+        <input type="{{ meta.type }}" name="{{ key }}" value="{{ config.get(key, meta.default) }}"
+               step="{{ meta.step }}" min="{{ meta.min }}" max="{{ meta.max }}"
+               title="{{ key }}: {{ meta.min }} – {{ meta.max }}">
     </div>
     {% endfor %}
     <hr style="border-color:var(--border); margin:16px 0">
@@ -625,8 +676,15 @@ def create_session():
         flash("Invalid JSON")
         return redirect("/new")
 
+    # Validate
+    errors = validate_config(config)
+    if errors:
+        for e in errors:
+            flash("⚠ " + e)
+        return redirect("/new")
+
     Path("configs/{}.json".format(name)).write_text(json.dumps(config, indent=4))
-    flash("Created config: {}".format(name))
+    flash("✓ Created config: {}".format(name))
 
     if request.args.get("start") == "local":
         Path("data/{}".format(name)).mkdir(parents=True, exist_ok=True)
@@ -648,8 +706,15 @@ def save_config(name):
     except json.JSONDecodeError:
         flash("Invalid JSON")
         return redirect("/edit/" + name)
+
+    errors = validate_config(config)
+    if errors:
+        for e in errors:
+            flash("⚠ " + e)
+        return redirect("/edit/" + name)
+
     Path("configs/{}.json".format(name)).write_text(json.dumps(config, indent=4))
-    flash("Saved: {}".format(name))
+    flash("✓ Saved: {}".format(name))
     return redirect("/")
 
 
@@ -686,8 +751,14 @@ def import_config():
             flash("No config provided")
             return redirect("/import")
 
+    errors = validate_config(config)
+    if errors:
+        for e in errors:
+            flash("⚠ " + e)
+        return redirect("/import")
+
     Path("configs/{}.json".format(name)).write_text(json.dumps(config, indent=4))
-    flash("Imported: {}".format(name))
+    flash("✓ Imported: {}".format(name))
     return redirect("/")
 
 
