@@ -763,35 +763,75 @@ def flush_csvs():
 
 
 def write_session_stats():
-    """Write a lightweight stats.json for the dashboard. No CSV parsing needed."""
+    """Write a rich stats.json for the dashboard. Updated every flush (~60s)."""
     import json as _json
     stats_path = TRADE_CSV.parent / "stats.json"
+
     combos = {}
     for c in state.combos:
         n = len(c.trades)
         wins = sum(1 for t in c.trades if t.get("result") == "WIN")
         combos[c.name] = {
-            "trades": n,
-            "wins": wins,
+            "trades": n, "wins": wins,
             "wr": round(wins / n * 100, 1) if n > 0 else 0,
             "pnl_taker": round(c.total_pnl_taker, 2),
             "pnl_maker": round(c.total_pnl_maker, 2),
             "bankroll": round(c.bankroll, 2),
         }
+
     total_trades = sum(v["trades"] for v in combos.values())
     total_wins = sum(v["wins"] for v in combos.values())
+
+    # Recent trades (last 20)
+    all_trades = []
+    for c in state.combos:
+        all_trades.extend(c.trades)
+    all_trades.sort(key=lambda t: t.get("timestamp", 0))
+    recent = []
+    for t in all_trades[-20:]:
+        recent.append({
+            "combo": t.get("combo"), "direction": t.get("direction"),
+            "fill_price": t.get("fill_price"), "filled_size": t.get("filled_size"),
+            "impulse_bps": t.get("impulse_bps"), "time_remaining": t.get("time_remaining"),
+            "result": t.get("result"), "pnl_taker": t.get("pnl_taker"),
+            "timestamp": t.get("timestamp"), "outcome": t.get("outcome"),
+        })
+
+    # Window history (last 20)
+    window_history = []
+    for w in state.completed_windows[-20:]:
+        ws = w.get("window_start", 0)
+        window_history.append({
+            "window_start": ws, "outcome": w.get("outcome"),
+        })
+
     stats = {
         "instance": INSTANCE,
         "updated": time.time(),
+        "started": state.completed_windows[0]["window_start"] if state.completed_windows else 0,
         "trades": total_trades,
         "wins": total_wins,
         "wr": round(total_wins / total_trades * 100, 1) if total_trades > 0 else 0,
         "pnl_taker": round(sum(v["pnl_taker"] for v in combos.values()), 2),
         "pnl_maker": round(sum(v["pnl_maker"] for v in combos.values()), 2),
-        "windows": len(state.completed_windows),
+        "windows_settled": len(state.completed_windows),
+        "current_window": state.window_start,
+        "window_open": state.window_open,
+        "window_open_source": state.window_open_source,
+        "window_end": state.window_end,
+        "window_active": state.window_active,
+        "btc_price": state.binance_price,
+        "book_bid": state.book.best_bid,
+        "book_ask": state.book.best_ask,
+        "book_spread": state.book.spread,
+        "book_source": state.book.source,
+        "cooldown_active": time.time() < state.cooldown_until,
+        "errors": state.errors,
         "combos": combos,
+        "recent_trades": recent,
+        "recent_windows": window_history,
     }
-    # Atomic write
+
     tmp = str(stats_path) + ".tmp"
     with open(tmp, "w") as f:
         _json.dump(stats, f)

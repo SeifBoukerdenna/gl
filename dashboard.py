@@ -486,22 +486,85 @@ INDEX_HTML = """
 
 SESSION_HTML = """
 <!DOCTYPE html><html><head><title>{{ name }} — PM Dashboard</title><meta charset="utf-8">
-<meta http-equiv="refresh" content="30">
+<meta http-equiv="refresh" content="15">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>""" + BASE_CSS + """
 .combo-bar { height:4px; border-radius:2px; margin-top:4px; }
 .combo-bar-fill { height:100%; border-radius:2px; transition:width 0.5s; }
-</style></head><body>
+.live-card { background:linear-gradient(135deg, var(--card), #1a1f2e); border-color:#2a3040; }
+.live-label { font-size:0.68em; color:var(--dim); text-transform:uppercase; letter-spacing:0.5px; }
+.live-val { font-size:1.1em; font-weight:600; margin-top:2px; }
+.window-pill { display:inline-block; padding:3px 10px; border-radius:12px; font-size:0.75em; font-weight:600; margin:2px; }
+.window-up { background:rgba(52,211,153,0.12); color:var(--green); }
+.window-down { background:rgba(248,113,113,0.12); color:var(--red); }
+</style>
+<script>
+function timeAgo(ts) {
+    if (!ts) return '--';
+    var d = Math.floor(Date.now()/1000 - ts);
+    if (d < 60) return d + 's ago';
+    if (d < 3600) return Math.floor(d/60) + 'm ago';
+    return Math.floor(d/3600) + 'h ' + Math.floor((d%3600)/60) + 'm ago';
+}
+</script>
+</head><body>
 <div class="container">
 <div class="topbar">
-    <h1><a href="/" style="color:var(--dim);-webkit-text-fill-color:var(--dim)">Dashboard</a> <span style="color:var(--dim);-webkit-text-fill-color:var(--dim)">/</span> {{ name }}</h1>
+    <h1><a href="/" style="color:var(--dim);-webkit-text-fill-color:var(--dim)">Dashboard</a>
+        <span style="color:var(--dim);-webkit-text-fill-color:var(--dim)">/</span> {{ name }}
+        {% if live.get('window_active') %}<span class="tag tag-active" style="margin-left:8px">LIVE</span>{% endif %}
+    </h1>
     <div class="actions">
         <a href="/" class="btn">← Back</a>
         <a href="/edit/{{ name }}" class="btn">Edit Config</a>
+        <a href="/session/{{ name }}" class="btn">Refresh</a>
     </div>
 </div>
 
-<div class="stats-row" style="margin-bottom:30px">
+<!-- Live Status Bar -->
+{% if live.get('btc_price') %}
+<div class="card live-card" style="margin-bottom:20px">
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:16px;">
+        <div>
+            <div class="live-label">BTC Price</div>
+            <div class="live-val">${{ "{:,.2f}".format(live.btc_price or 0) }}</div>
+        </div>
+        <div>
+            <div class="live-label">Price To Beat</div>
+            <div class="live-val">{{ "${:,.2f}".format(live.window_open) if live.window_open else '—' }}
+                <span class="dim" style="font-size:0.7em">{{ live.window_open_source or '' }}</span></div>
+        </div>
+        <div>
+            <div class="live-label">PM Book</div>
+            <div class="live-val">
+                <span class="green">{{ "{:.0f}".format((live.book_bid or 0)*100) }}¢</span> /
+                <span class="red">{{ "{:.0f}".format((live.book_ask or 0)*100) }}¢</span>
+                <span class="dim" style="font-size:0.7em">spr {{ "{:.0f}".format((live.book_spread or 0)*100) }}¢</span>
+            </div>
+        </div>
+        <div>
+            <div class="live-label">Current Window</div>
+            <div class="live-val">{{ live.current_window or '—' }}
+                {% if live.window_active %}<span class="tag tag-active" style="font-size:0.65em">active</span>{% endif %}
+            </div>
+        </div>
+        <div>
+            <div class="live-label">Last Updated</div>
+            <div class="live-val dim" id="updated-ago">—</div>
+            <script>document.getElementById('updated-ago').textContent = timeAgo({{ live.updated or 0 }});</script>
+        </div>
+        {% if live.cooldown_active %}
+        <div>
+            <div class="live-label">Status</div>
+            <div class="live-val yellow">⏸ COOLDOWN</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Stats Row -->
+<div class="stats-row" style="margin-bottom:24px">
     <div class="stat">
         <div class="stat-val" style="color:var(--blue)">{{ stats.trades }}</div>
         <div class="stat-label">Trades</div>
@@ -515,11 +578,24 @@ SESSION_HTML = """
         <div class="stat-label">PnL (Taker)</div>
     </div>
     <div class="stat">
-        <div class="stat-val dim">{{ stats.combos|length }}</div>
-        <div class="stat-label">Active Combos</div>
+        <div class="stat-val" style="color:var(--blue)">{{ live.get('windows_settled', stats.get('windows', 0)) }}</div>
+        <div class="stat-label">Windows</div>
     </div>
 </div>
 
+<!-- Recent Windows -->
+{% if live.get('recent_windows') %}
+<div class="section">
+    <h2>Recent Windows</h2>
+    <div style="display:flex; flex-wrap:wrap; gap:4px;">
+    {% for w in live.recent_windows %}
+        <span class="window-pill window-{{ w.outcome|lower }}">{{ w.outcome }}</span>
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Per-Combo Breakdown -->
 {% if stats.combos %}
 <div class="section">
     <h2>Per-Combo Breakdown</h2>
@@ -541,37 +617,50 @@ SESSION_HTML = """
     {% endfor %}
     </table>
 </div>
-{% else %}
-<div class="empty">
-    <div class="empty-icon">📊</div>
-    <div>No trade data yet for this session</div>
-    <div style="margin-top:8px;font-size:0.82em" class="dim">If running on VPS, data will be pulled automatically</div>
-</div>
 {% endif %}
 
-{% if recent %}
+<!-- Trade Log -->
+{% if trades %}
 <div class="section">
-    <h2>Recent Trades (last 10)</h2>
+    <h2>Trade Log (last {{ trades|length }})</h2>
     <table>
-    <tr><th>Combo</th><th>Direction</th><th>Entry</th><th>Size</th><th>Impulse</th><th>T-Rem</th><th>Result</th><th>PnL</th></tr>
-    {% for t in recent %}
+    <tr><th>Time</th><th>Combo</th><th>Dir</th><th>Entry</th><th>Size</th><th>Impulse</th><th>T-Rem</th><th>Outcome</th><th>Result</th><th>PnL</th></tr>
+    {% for t in trades %}
     <tr>
-        <td>{{ t.get('combo','?') }}</td>
-        <td>{{ t.get('direction','?') }}</td>
-        <td>{{ (t.get('fill_price','0')|float * 100)|round(1) }}¢</td>
-        <td>{{ t.get('filled_size','?') }}</td>
-        <td>{{ t.get('impulse_bps','?') }}bp</td>
-        <td>{{ t.get('time_remaining','?') }}s</td>
-        <td><span class="tag {{ 'tag-active' if t.get('result')=='WIN' else 'tag-dead' }}">{{ t.get('result','?') }}</span></td>
-        <td class="{{ 'pnl-positive' if (t.get('pnl_taker','0')|float) > 0 else 'pnl-negative' }}" style="font-weight:600">
-            ${{ t.get('pnl_taker','0') }}</td>
+        <td class="dim">{{ t._time }}</td>
+        <td>{{ t.combo }}</td>
+        <td>{{ t.direction }}</td>
+        <td>{{ t._entry_c }}¢</td>
+        <td>{{ t.filled_size }}</td>
+        <td>{{ t.impulse_bps }}bp</td>
+        <td>{{ t.time_remaining }}s</td>
+        <td>{{ t.outcome or '—' }}</td>
+        <td><span class="tag {{ 'tag-active' if t.result=='WIN' else 'tag-dead' if t.result=='LOSS' else '' }}">{{ t.result or '—' }}</span></td>
+        <td class="{{ 'pnl-positive' if (t._pnl or 0) > 0 else 'pnl-negative' if (t._pnl or 0) < 0 else 'dim' }}" style="font-weight:600">
+            {{ '${}'.format(t.pnl_taker) if t.pnl_taker else '—' }}</td>
     </tr>
     {% endfor %}
     </table>
 </div>
+{% else %}
+<div class="empty">
+    <div class="empty-icon">📊</div>
+    <div>No trade data yet</div>
+</div>
 {% endif %}
 
-<div class="auto-refresh"><span class="dot"></span>Auto-refresh 30s</div>
+{% if live.get('errors') %}
+<div class="section">
+    <h2>Errors</h2>
+    <div class="dim" style="font-size:0.82em">
+    {% for k, v in live.errors.items() %}
+        {{ k }}: {{ v }}{% if not loop.last %} | {% endif %}
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="auto-refresh"><span class="dot"></span>Auto-refresh 15s</div>
 </div></body></html>
 """
 
@@ -685,9 +774,11 @@ def index():
 
 @app.route("/session/<name>")
 def session_detail(name):
+    from datetime import datetime
+
     stats = get_session_stats(name)
 
-    # If no local data, try pulling from VPS first
+    # If no local data, try pulling from VPS
     if stats["trades"] == 0:
         try:
             subprocess.run(["./scripts/pull-data.sh", name], capture_output=True, timeout=15)
@@ -695,28 +786,54 @@ def session_detail(name):
         except Exception:
             pass
 
-    # Get last 10 trades — check both old and new CSV paths
-    csv_path = DATA_DIR / name / "trades.csv"
-    if not csv_path.exists():
-        csv_path = DATA_DIR / name / "paper_trades_v2.csv"
-    if not csv_path.exists() and name == "default":
-        csv_path = DATA_DIR / "paper_trades_v2.csv"
-    recent = []
-    if csv_path.exists():
+    # Read live stats.json for real-time info
+    live = {}
+    stats_json = DATA_DIR / name / "stats.json"
+    if stats_json.exists():
         try:
-            with open(csv_path) as f:
-                reader = csv.DictReader(f)
-                if reader.fieldnames:
-                    reader.fieldnames = [h.strip() for h in reader.fieldnames]
-                all_rows = []
-                for row in reader:
-                    all_rows.append({k.strip(): v.strip() if isinstance(v, str) else v for k, v in row.items()})
-                recent = all_rows[-10:]
+            live = json.loads(stats_json.read_text())
         except Exception:
             pass
 
+    # Get trades from stats.json recent_trades (preferred) or CSV fallback
+    trades = []
+    if live.get("recent_trades"):
+        for t in live["recent_trades"]:
+            ts = t.get("timestamp", 0)
+            fp = t.get("fill_price", 0) or 0
+            pnl = t.get("pnl_taker")
+            t["_time"] = datetime.fromtimestamp(ts).strftime("%H:%M:%S") if ts else "—"
+            t["_entry_c"] = "{:.1f}".format(float(fp) * 100) if fp else "?"
+            t["_pnl"] = float(pnl) if pnl else 0
+            trades.append(t)
+        trades.reverse()  # newest first
+    else:
+        # CSV fallback
+        for p in [DATA_DIR / name / "trades.csv", DATA_DIR / name / "paper_trades_v2.csv",
+                   DATA_DIR / "paper_trades_v2.csv" if name == "default" else None]:
+            if p and p.exists():
+                try:
+                    with open(p) as f:
+                        reader = csv.DictReader(f)
+                        if reader.fieldnames:
+                            reader.fieldnames = [h.strip() for h in reader.fieldnames]
+                        rows = [{k.strip(): v.strip() if isinstance(v, str) else v for k, v in row.items()} for row in reader]
+                    for t in rows[-20:]:
+                        ts = float(t.get("timestamp", 0) or 0)
+                        fp = float(t.get("fill_price", 0) or 0)
+                        pnl = t.get("pnl_taker")
+                        t["_time"] = datetime.fromtimestamp(ts).strftime("%H:%M:%S") if ts else "—"
+                        t["_entry_c"] = "{:.1f}".format(fp * 100) if fp else "?"
+                        t["_pnl"] = float(pnl) if pnl else 0
+                        trades.append(t)
+                    trades.reverse()
+                except Exception:
+                    pass
+                break
+
     combo_sorted = sorted(stats.get("combos", {}).items(), key=lambda x: x[1]["pnl"], reverse=True)
-    return render_template_string(SESSION_HTML, name=name, stats=stats, combo_sorted=combo_sorted, recent=recent)
+    return render_template_string(SESSION_HTML, name=name, stats=stats, combo_sorted=combo_sorted,
+                                  trades=trades, live=live)
 
 
 @app.route("/new")
