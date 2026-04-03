@@ -199,6 +199,15 @@ config|cfg)
     fi
     ;;
 
+# ── Web UI ────────────────────────────────────────────────
+ui|web)
+    echo -e "${G}Opening dashboard at http://localhost:5555${RST}"
+    python3 dashboard.py &
+    sleep 1
+    open http://localhost:5555 2>/dev/null || xdg-open http://localhost:5555 2>/dev/null || echo "Open http://localhost:5555"
+    wait
+    ;;
+
 # ── Kill session ──────────────────────────────────────────
 kill|k)
     NAME="${1}"
@@ -244,6 +253,7 @@ help|h|--help|-h|"")
     echo -e "    ${C}pm config${RST} NAME --edit       Edit existing config"
     echo ""
     echo -e "  ${B}${W}Infra${RST}"
+    echo -e "    ${C}pm ui${RST}                       Open web dashboard"
     echo -e "    ${C}pm deploy${RST}                   Deploy to VPS"
     echo -e "    ${C}pm ssh${RST}                      SSH to VPS"
     echo ""
