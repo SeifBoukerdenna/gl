@@ -1,0 +1,5 @@
+{
+    "_description": "Certainty premium safe — high z + short time only",
+    "ARCHITECTURE": "certainty_premium",
+    "ENABLED_COMBOS": ["CP_z2_60s_95c", "CP_z2_30s_93c"]
+}

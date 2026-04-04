@@ -112,13 +112,11 @@ def check_signals(state, now_s):
                             "impulse {:.0f}bp > {}bp".format(abs(impulse_bps), engine.MAX_IMPULSE_BP))
             continue
 
-        # F2: Actual cost filter
-        actual_cost = entry_price if direction == "YES" else (1.0 - entry_price)
-        if actual_cost < engine.MIN_ENTRY_PRICE or actual_cost > engine.MAX_ENTRY_PRICE:
+        # F2: Entry price filter (YES price range — configs specify YES price bounds)
+        if entry_price < engine.MIN_ENTRY_PRICE or entry_price > engine.MAX_ENTRY_PRICE:
             engine.log_skip(combo.name, direction, entry_price, impulse_bps, time_remaining,
-                            "actual cost {:.0f}c outside {:.0f}-{:.0f}c (YES={:.0f}c, dir={})".format(
-                                actual_cost * 100, engine.MIN_ENTRY_PRICE * 100, engine.MAX_ENTRY_PRICE * 100,
-                                entry_price * 100, direction))
+                            "YES price {:.0f}c outside {:.0f}-{:.0f}c".format(
+                                entry_price * 100, engine.MIN_ENTRY_PRICE * 100, engine.MAX_ENTRY_PRICE * 100))
             continue
 
         # F3: Dead zone

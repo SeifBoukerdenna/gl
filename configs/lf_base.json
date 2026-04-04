@@ -1,0 +1,4 @@
+{
+    "_description": "Lottery fade base — all z-score/time combos, fade overpriced losing tokens",
+    "ARCHITECTURE": "lottery_fade"
+}

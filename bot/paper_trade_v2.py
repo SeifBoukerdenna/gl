@@ -33,7 +33,7 @@ import websockets
 BASE_TRADE_DOLLARS = 100
 MAX_SHARES = 500
 MAX_RISK_PCT = 0.10
-MIN_SHARES = 5
+MIN_SHARES = 1
 STARTING_BANKROLL = 1000
 
 # Entry filters
@@ -427,20 +427,24 @@ def apply_update(data):
                 state.book.source = "websocket"
             except (ValueError, TypeError):
                 pass
+        # Also update depth from WS price_changes (complements REST poll)
         if aid == state.yes_token_id:
-            price = float(pc["price"])
-            size = float(pc["size"])
-            side = pc.get("side", "")
-            if side == "BUY":
-                state.book.bids = [(p, s) for p, s in state.book.bids if p != price]
-                if size > 0:
-                    state.book.bids.append((price, size))
-                state.book.bids.sort(key=lambda x: -x[0])
-            elif side == "SELL":
-                state.book.asks = [(p, s) for p, s in state.book.asks if p != price]
-                if size > 0:
-                    state.book.asks.append((price, size))
-                state.book.asks.sort(key=lambda x: x[0])
+            try:
+                price = float(pc.get("price", 0))
+                size = float(pc.get("size", 0))
+                side = pc.get("side", "")
+                if side == "BUY" and price > 0:
+                    state.book.bids = [(p, s) for p, s in state.book.bids if p != price]
+                    if size > 0:
+                        state.book.bids.append((price, size))
+                    state.book.bids.sort(key=lambda x: -x[0])
+                elif side == "SELL" and price > 0:
+                    state.book.asks = [(p, s) for p, s in state.book.asks if p != price]
+                    if size > 0:
+                        state.book.asks.append((price, size))
+                    state.book.asks.sort(key=lambda x: x[0])
+            except (ValueError, TypeError, KeyError):
+                pass
 
 
 async def pm_book_ws_loop():
@@ -482,6 +486,9 @@ async def pm_book_ws_loop():
 
 
 async def pm_book_rest_poll():
+    """Always-running REST poll for full order book depth.
+    This is the authoritative source for book.bids/asks depth levels.
+    The WS feed updates best_bid/best_ask faster but doesn't maintain full depth."""
     async with httpx.AsyncClient(timeout=10) as client:
         while state.running:
             if state.yes_token_id:
@@ -498,10 +505,11 @@ async def pm_book_rest_poll():
                         book.mid = (book.best_bid + book.best_ask) / 2
                         book.spread = book.best_ask - book.best_bid
                     book.updated_at = time.time()
-                    book.source = "rest_poll"
-                except Exception:
+                except Exception as e:
                     state.errors["pm_rest"] += 1
-            await asyncio.sleep(1.0)
+                    if state.errors["pm_rest"] <= 3:
+                        print("  [REST] Error: {}".format(e))
+            await asyncio.sleep(0.5)  # poll every 500ms for fresh depth
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -561,6 +569,10 @@ async def read_chainlink_btc():
 # ══════════════════════════════════════════════════════════════════
 def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_price):
     book = state.book
+
+    # Check book depth is available
+    if not book.bids and not book.asks:
+        return
 
     trade_size = combo.compute_position_size(entry_price)
     if trade_size <= 0:
@@ -970,15 +982,11 @@ def check_signals_sync(now_s):
                      "impulse {:.0f}bp > {}bp".format(abs(impulse_bps), MAX_IMPULSE_BP))
             continue
 
-        # F2: Entry price range (using actual cost — what you really pay per share)
-        # YES/UP: actual cost = YES price (entry_price)
-        # NO/DOWN: actual cost = 1 - YES price (NO token price)
-        actual_cost = entry_price if direction == "YES" else (1.0 - entry_price)
-        if actual_cost < MIN_ENTRY_PRICE or actual_cost > MAX_ENTRY_PRICE:
+        # F2: Entry price range (YES price — configs specify YES price bounds)
+        if entry_price < MIN_ENTRY_PRICE or entry_price > MAX_ENTRY_PRICE:
             log_skip(combo.name, direction, entry_price, impulse_bps, time_remaining,
-                     "actual cost {:.0f}c outside {:.0f}-{:.0f}c (YES={:.0f}c, dir={})".format(
-                         actual_cost * 100, MIN_ENTRY_PRICE * 100, MAX_ENTRY_PRICE * 100,
-                         entry_price * 100, direction))
+                     "YES price {:.0f}c outside {:.0f}-{:.0f}c".format(
+                         entry_price * 100, MIN_ENTRY_PRICE * 100, MAX_ENTRY_PRICE * 100))
             continue
 
         # F4: Dead zone
@@ -1282,6 +1290,7 @@ async def run():
     print("{}{}{}".format(Y, "=" * 70, RST))
 
     book_task = asyncio.create_task(pm_book_ws_loop())
+    rest_poll_task = asyncio.create_task(pm_book_rest_poll())  # always run REST for full book depth
     for _ in range(50):
         if state.book.updated_at > 0:
             break
@@ -1295,13 +1304,13 @@ async def run():
     window_task = asyncio.create_task(window_manager())
 
     try:
-        await asyncio.gather(ws_task, book_task, window_task)
+        await asyncio.gather(ws_task, book_task, rest_poll_task, window_task)
     except asyncio.CancelledError:
         pass
     finally:
-        for t in [resolver_task, book_task, ws_task, window_task]:
+        for t in [resolver_task, book_task, rest_poll_task, ws_task, window_task]:
             t.cancel()
-        for t in [resolver_task, book_task, ws_task]:
+        for t in [resolver_task, book_task, rest_poll_task, ws_task]:
             try:
                 await t
             except (asyncio.CancelledError, Exception):

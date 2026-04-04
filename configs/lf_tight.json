@@ -1,0 +1,5 @@
+{
+    "_description": "Lottery fade tight — high conviction z>2.5 only",
+    "ARCHITECTURE": "lottery_fade",
+    "ENABLED_COMBOS": ["LF_z2.5_120s", "LF_z3_120s", "LF_z2_60s"]
+}
