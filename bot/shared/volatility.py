@@ -36,7 +36,7 @@ class VolatilityTracker:
         self.min_ticks = min_ticks
         self._ticks = deque(maxlen=lookback_seconds + 100)
         self._sigma_cache = None  # (timestamp, sigma_per_sqrt_sec_dollars)
-        self._cache_ttl = 10  # recompute every 10 seconds
+        self._cache_ttl = 3  # recompute every 3 seconds (catch vol spikes faster)
 
     def record_tick(self, price, epoch_second):
         """Record a BTC price tick. Call once per second from on_tick."""

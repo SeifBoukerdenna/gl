@@ -479,9 +479,13 @@ async def pm_book_ws_loop():
         if state.yes_token_id != token_id:
             continue
         if ws_failures >= 3:
-            print("  [WARN] PM WS failed {}x, using REST".format(ws_failures))
-            await pm_book_rest_poll()
-            return
+            print("  [WARN] PM WS failed {}x, REST fallback for 60s then retry".format(ws_failures))
+            for _ in range(120):  # 60 seconds of REST polling
+                if not state.running:
+                    return
+                await asyncio.sleep(0.5)
+            ws_failures = 0  # Reset and retry WS
+            continue
         await asyncio.sleep(1)
 
 
@@ -1111,8 +1115,39 @@ async def outcome_resolver():
                     # Check if we already settled with book mid — verify
                     already = next((w for w in state.completed_windows if w["window_start"] == ws), None)
                     if already and already["outcome"] != outcome:
-                        print("  {}[CORRECTED] {} was {} now {}{}".format(Y, ws, already["outcome"], outcome, RST))
-                        # Re-settle with correct outcome (complex — skip for now, just log)
+                        print("  {}[CORRECTED] {} was {} now {} — re-settling{}".format(Y, ws, already["outcome"], outcome, RST))
+                        # Re-settle: reverse the old PnL and apply the correct one
+                        for combo in state.combos:
+                            for t in combo.trades:
+                                if t.get("window_start") == ws and t.get("outcome") == already["outcome"]:
+                                    old_pnl = t["pnl_taker"]
+                                    # Reverse old PnL
+                                    combo.total_pnl_taker -= old_pnl
+                                    combo.total_pnl_maker -= t["pnl_maker"]
+                                    combo.bankroll -= old_pnl
+                                    # Recompute with correct outcome
+                                    size = t["filled_size"]
+                                    if t["direction"] == "YES":
+                                        if outcome == "Up":
+                                            new_pnl = (1.0 - t["effective_entry_taker"]) * size
+                                            t["result"] = "WIN"
+                                        else:
+                                            new_pnl = -t["effective_entry_taker"] * size
+                                            t["result"] = "LOSS"
+                                    else:
+                                        if outcome == "Down":
+                                            new_pnl = t["effective_entry_taker"] * size
+                                            t["result"] = "WIN"
+                                        else:
+                                            new_pnl = -(1.0 - t["effective_entry_taker"]) * size
+                                            t["result"] = "LOSS"
+                                    t["pnl_taker"] = round(new_pnl, 2)
+                                    t["outcome"] = outcome
+                                    combo.total_pnl_taker += new_pnl
+                                    combo.bankroll += new_pnl
+                                    print("    {} {} {} -> {} PnL ${:.0f} -> ${:.0f}".format(
+                                        combo.name, t["direction"], already["outcome"], outcome, old_pnl, new_pnl))
+                        already["outcome"] = outcome
                     elif not already:
                         settle_window(ws, outcome, final_price=fp, silent=True)
                         state.completed_windows.append({"window_start": ws, "outcome": outcome})

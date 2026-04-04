@@ -1,0 +1,19 @@
+[Unit]
+Description=Polymarket Mean Reversion Bot (%i)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/polymarket-bot
+ExecStart=/opt/polymarket-bot/.venv/bin/python -u bot/mean_revert_bot.py --instance %i
+ExecStop=/bin/kill -SIGINT $MAINPID
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=30
+StandardOutput=append:/var/log/polymarket-bot/%i.log
+StandardError=append:/var/log/polymarket-bot/%i.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+{
+    "_description": "Mean reversion base — buy depressed tokens, sell on recovery",
+    "MR_ENTRY_MAX_PRICE": 0.15,
+    "MR_ENTRY_MIN_PRICE": 0.03,
+    "MR_MIN_DROP_CENTS": 10,
+    "MR_TARGET_CENTS": 8,
+    "MR_STOP_LOSS_CENTS": 4,
+    "MR_MAX_HOLD_SEC": 120,
+    "MR_TRAILING_STOP_CENTS": 3
+}

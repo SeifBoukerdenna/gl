@@ -38,8 +38,8 @@ def _bg_vps_sync():
         try:
             # Get list of VPS sessions
             raw = ssh_cmd("""
-                for svc in $(systemctl list-units 'polymarket-bot@*' --no-pager --no-legend 2>/dev/null | awk '{print $1}'); do
-                    INST=$(echo $svc | sed 's/polymarket-bot@//;s/\\.service//')
+                for svc in $(systemctl list-units 'polymarket-bot@*' 'polymarket-mr@*' --no-pager --no-legend 2>/dev/null | awk '{print $1}'); do
+                    INST=$(echo $svc | sed 's/polymarket-bot@//;s/polymarket-mr@//;s/\\.service//')
                     echo "$INST"
                 done
             """)
@@ -207,8 +207,8 @@ def get_all_sessions():
     # Get VPS running status
     vps_status = {}
     raw = ssh_cmd("""
-        for svc in $(systemctl list-units 'polymarket-bot@*' --no-pager --no-legend 2>/dev/null | awk '{print $1}'); do
-            INST=$(echo $svc | sed 's/polymarket-bot@//;s/\\.service//')
+        for svc in $(systemctl list-units 'polymarket-bot@*' 'polymarket-mr@*' --no-pager --no-legend 2>/dev/null | awk '{print $1}'); do
+            INST=$(echo $svc | sed 's/polymarket-bot@//;s/polymarket-mr@//;s/\\.service//')
             ST=$(systemctl is-active $svc 2>/dev/null)
             echo "${INST}|${ST}"
         done
@@ -1488,8 +1488,8 @@ def api_vps_health():
         info["memory"] = parts[1].strip() if len(parts) > 1 else ""
     # Per-session status
     raw2 = ssh_cmd("""
-        for svc in $(systemctl list-units 'polymarket-bot@*' --no-pager --no-legend 2>/dev/null | awk '{print $1}'); do
-            INST=$(echo $svc | sed 's/polymarket-bot@//;s/\\.service//')
+        for svc in $(systemctl list-units 'polymarket-bot@*' 'polymarket-mr@*' --no-pager --no-legend 2>/dev/null | awk '{print $1}'); do
+            INST=$(echo $svc | sed 's/polymarket-bot@//;s/polymarket-mr@//;s/\\.service//')
             ST=$(systemctl is-active $svc 2>/dev/null)
             STATS="/opt/polymarket-bot/data/${INST}/stats.json"
             UP=$(systemctl show $svc --property=ActiveEnterTimestamp --value 2>/dev/null)
