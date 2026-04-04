@@ -1,0 +1,11 @@
+{
+    "_description": "Fast combos only — 10s and 15s lookbacks with highest win rates, actual cost 65-80c",
+    "MIN_ENTRY_PRICE": 0.65,
+    "MAX_ENTRY_PRICE": 0.80,
+    "MAX_IMPULSE_BP": 15,
+    "DEAD_ZONE_START": 0,
+    "DEAD_ZONE_END": 210,
+    "WINDOW_BUFFER_START": 3,
+    "WINDOW_BUFFER_END": 5,
+    "ENABLED_COMBOS": ["E_5bp_15s", "F_7bp_15s", "H_5bp_10s"]
+}

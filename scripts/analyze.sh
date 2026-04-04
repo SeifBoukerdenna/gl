@@ -14,10 +14,10 @@ if [ "$SESSION" = "--all" ]; then
     # Run unified analysis (handles all sessions + comparison)
     ANALYZE_ALL=1 python3 analysis/analyze_paper.py
 
-    # Open comparison charts on macOS
+    # Report opens automatically via analyze_paper.py
     if [[ "$OSTYPE" == "darwin"* ]]; then
         echo ""
-        echo "Opening comparison charts..."
+        echo "Report: output/report.html"
         open output/comparison/*.png 2>/dev/null || true
     fi
 else

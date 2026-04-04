@@ -908,6 +908,28 @@ def main():
         if summaries:
             cross_session_comparison(summaries)
 
+        # Generate reports
+        try:
+            import importlib.util
+            # HTML report
+            spec = importlib.util.spec_from_file_location("generate_report",
+                Path(__file__).parent / "generate_report.py")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            report_path = mod.generate_report()
+            # CSV report for LLM analysis
+            spec2 = importlib.util.spec_from_file_location("generate_csv_report",
+                Path(__file__).parent / "generate_csv_report.py")
+            mod2 = importlib.util.module_from_spec(spec2)
+            spec2.loader.exec_module(mod2)
+            mod2.generate()
+            # Open HTML report
+            if report_path:
+                import subprocess as _sp
+                _sp.run(["open", str(report_path)], capture_output=True)
+        except Exception as e:
+            print("  Report generation failed: {}".format(e))
+
     else:
         # Single session mode
         csv_path = find_csv()

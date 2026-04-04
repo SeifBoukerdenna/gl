@@ -1,0 +1,5 @@
+{
+    "_description": "Book fade strong only — 3x+ imbalance with confirmation",
+    "ARCHITECTURE": "book_fade",
+    "ENABLED_COMBOS": ["BF_3x_fade", "BF_4x_fade", "BF_5x_snap"]
+}

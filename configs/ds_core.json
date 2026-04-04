@@ -1,0 +1,5 @@
+{
+    "_description": "Delta sniper core — 2c+ gap, trades more frequently",
+    "ARCHITECTURE": "delta_sniper",
+    "ENABLED_COMBOS": ["DS_2c_gap", "DS_3c_gap", "DS_5c_gap", "DS_2c_extreme"]
+}

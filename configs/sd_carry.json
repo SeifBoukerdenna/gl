@@ -1,0 +1,5 @@
+{
+    "_description": "Settlement drift carry — early-window momentum from prior outcome",
+    "ARCHITECTURE": "settlement_drift",
+    "ENABLED_COMBOS": ["SD_carry_3bp", "SD_carry_5bp"]
+}

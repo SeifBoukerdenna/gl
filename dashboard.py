@@ -172,6 +172,33 @@ def get_csv_stats(name):
         return None
 
 
+def _get_session_architecture(name):
+    """Get architecture for a session from cache, stats.json, or config file."""
+    # 1. VPS cache (fastest)
+    with _vps_cache_lock:
+        cached = _vps_cache.get(name)
+    if cached and cached.get("architecture"):
+        return cached["architecture"]
+    # 2. Local stats.json
+    stats_path = DATA_DIR / name / "stats.json"
+    if stats_path.exists():
+        try:
+            d = json.loads(stats_path.read_text())
+            if d.get("architecture"):
+                return d["architecture"]
+        except Exception:
+            pass
+    # 3. Config file
+    cfg_path = CONFIGS_DIR / "{}.json".format(name)
+    if cfg_path.exists():
+        try:
+            d = json.loads(cfg_path.read_text())
+            return d.get("ARCHITECTURE", "impulse_lag")
+        except Exception:
+            pass
+    return "impulse_lag"
+
+
 def get_all_sessions():
     """Get sessions with status from VPS + stats from CSV (source of truth)."""
     sessions = []
@@ -229,8 +256,12 @@ def get_all_sessions():
                 status = "stopped"
                 where = "vps"
 
+            # Get architecture from stats.json cache, local stats.json, or config
+            arch = _get_session_architecture(name)
+
             sessions.append({
                 "name": name, "where": where, "status": status,
+                "architecture": arch,
                 "trades": csv_stats["trades"], "wins": csv_stats["wins"],
                 "wr": csv_stats["wr"], "pnl_taker": csv_stats["pnl_taker"],
             })
@@ -239,8 +270,10 @@ def get_all_sessions():
     # Add VPS sessions that don't have local CSV data yet
     for name, st in vps_status.items():
         if name not in seen:
+            arch = _get_session_architecture(name)
             sessions.append({
                 "name": name, "where": "vps", "status": st,
+                "architecture": arch,
                 "trades": 0, "wins": 0, "wr": 0, "pnl_taker": 0,
             })
             seen.add(name)
@@ -250,6 +283,7 @@ def get_all_sessions():
         if name not in seen:
             sessions.append({
                 "name": name, "where": "local", "status": "running",
+                "architecture": _get_session_architecture(name),
                 "trades": 0, "wins": 0, "wr": 0, "pnl_taker": 0,
             })
 
@@ -650,7 +684,7 @@ function renderOverview(el) {
         const bc=w>=60?'var(--green)':w>=50?'var(--yellow)':'var(--red)';
         cards += `<div class="session-card ${cls}" onclick="navigate('session','${s.name}')">
           <div class="sc-top"><div><span class="d mono" style="font-size:10px;font-weight:700">#${i+1}</span> <span class="sc-name">${s.name}</span></div>
-          <div style="display:flex;align-items:center;gap:5px"><span class="sc-where">${s.where}</span><div class="sc-dot ${active?'on':'off'}"></div></div></div>
+          <div style="display:flex;align-items:center;gap:5px"><span class="sc-where">${s.architecture||'impulse_lag'}</span><span class="sc-where">${s.where}</span><div class="sc-dot ${active?'on':'off'}"></div></div></div>
           <div class="sc-stats">
             <div><div class="sc-stat-label">PnL</div><div class="sc-stat-value ${pc(p)}">${fp(p)}</div></div>
             <div><div class="sc-stat-label">Win Rate</div><div class="sc-stat-value ${wc(w)}">${w}%</div></div>
@@ -743,6 +777,7 @@ function renderSession(el) {
         <h1 style="font-size:18px;font-weight:700">${name}</h1>
         ${active?'<span class="tag tag-live">LIVE</span>':'<span class="tag tag-dead">STOPPED</span>'}
         <span class="tag" style="background:${d.is_local?'var(--blue-bg)':'rgba(139,92,246,.1)'};color:${d.is_local?'var(--blue)':'var(--purple)'};border:1px solid ${d.is_local?'var(--blue-border)':'rgba(139,92,246,.2)'}">${d.is_local?'LOCAL':'VPS'}</span>
+        <span class="tag" style="background:rgba(6,182,212,.1);color:var(--cyan);border:1px solid rgba(6,182,212,.2)">${d.architecture||meta.architecture||'impulse_lag'}</span>
         ${hHtml}
       </div>
       <div style="display:flex;gap:6px">
@@ -966,7 +1001,9 @@ async function renderAnalysis(el) {
         const s=sessions[name];
         lbRows+=`<tr style="cursor:pointer" onclick="navigate('session','${name}')">
             <td style="font-weight:700;color:${i<3?'var(--yellow)':'var(--dim)'}">#${i+1}</td>
-            <td style="font-weight:700;color:var(--text)">${name}</td><td>${s.trades}</td>
+            <td style="font-weight:700;color:var(--text)">${name}</td>
+            <td><span class="tag" style="background:rgba(6,182,212,.1);color:var(--cyan);border:1px solid rgba(6,182,212,.2);font-size:9px">${s.architecture||'impulse_lag'}</span></td>
+            <td>${s.trades}</td>
             <td class="${wc(s.wr)}">${s.wr}%</td>
             <td class="${pc(s.pnl)}" style="font-weight:700">${fp(s.pnl)}</td>
             <td class="${pc(s.avg_pnl)}">${fps(s.avg_pnl)}</td></tr>`;
@@ -1008,7 +1045,7 @@ async function renderAnalysis(el) {
 
     <div class="analysis-section">
         <div class="analysis-section-title"><span style="color:var(--yellow)">&#9733;</span> Session Leaderboard</div>
-        <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Session</th><th>Trades</th><th>Win%</th><th>PnL</th><th>$/Trade</th></tr></thead><tbody>${lbRows}</tbody></table></div></div>
+        <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Session</th><th>Arch</th><th>Trades</th><th>Win%</th><th>PnL</th><th>$/Trade</th></tr></thead><tbody>${lbRows}</tbody></table></div></div>
     </div>
 
     <!-- Interactive Charts -->
@@ -1591,7 +1628,11 @@ def get_chart_data():
                 bp = sum(float(t.get("pnl_taker",0) or 0) for t in bucket_trades)
                 time_buckets[label] = {"n": len(bucket_trades), "wr": round(bw/len(bucket_trades)*100,1), "pnl": round(bp)}
 
+        # Detect architecture from trades or config
+        arch = _get_session_architecture(d.name)
+
         sessions[d.name] = {
+            "architecture": arch,
             "trades": n, "wins": wins, "pnl": round(total_pnl),
             "wr": round(wins / n * 100, 1), "avg_pnl": round(total_pnl / n, 1),
             "cum_pnl": cum, "combos": combos,

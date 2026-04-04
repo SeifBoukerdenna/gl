@@ -1,0 +1,5 @@
+{
+    "_description": "Settlement drift crossover — late-window 0.50 crossing trades",
+    "ARCHITECTURE": "settlement_drift",
+    "ENABLED_COMBOS": ["SD_cross_20s", "SD_cross_45s", "SD_cross_60s"]
+}

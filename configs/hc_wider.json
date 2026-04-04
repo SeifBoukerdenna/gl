@@ -1,0 +1,11 @@
+{
+    "_description": "Wider entry 60-85c actual cost — tests if loosening from 65c captures more volume without killing edge",
+    "MIN_ENTRY_PRICE": 0.60,
+    "MAX_ENTRY_PRICE": 0.85,
+    "MAX_IMPULSE_BP": 15,
+    "DEAD_ZONE_START": 0,
+    "DEAD_ZONE_END": 210,
+    "WINDOW_BUFFER_START": 3,
+    "WINDOW_BUFFER_END": 5,
+    "ENABLED_COMBOS": ["A_5bp_30s", "B_7bp_30s", "E_5bp_15s", "F_7bp_15s", "H_5bp_10s", "C_10bp_30s"]
+}

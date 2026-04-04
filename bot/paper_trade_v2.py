@@ -11,10 +11,16 @@ import csv
 import json
 import os
 import signal
+import sys
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# Ensure the project root is on sys.path (for 'bot.architectures' imports)
+_project_root = str(Path(__file__).resolve().parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 import httpx
 import websockets
@@ -27,7 +33,7 @@ import websockets
 BASE_TRADE_DOLLARS = 100
 MAX_SHARES = 500
 MAX_RISK_PCT = 0.10
-MIN_SHARES = 10
+MIN_SHARES = 5
 STARTING_BANKROLL = 1000
 
 # Entry filters
@@ -86,6 +92,7 @@ def set_instance(name):
 
 def load_config(name):
     """Load config overrides from configs/{name}.json. Missing keys use defaults."""
+    global _ARCH_SPEC
     config_path = Path("configs") / "{}.json".format(name)
     if not config_path.exists():
         config_path = Path("configs/default.json")
@@ -97,6 +104,21 @@ def load_config(name):
         overrides = _json.load(f)
 
     g = globals()
+
+    # Load architecture FIRST (determines combo params and extra globals)
+    arch_name = overrides.pop("ARCHITECTURE", g.get("ARCHITECTURE", "impulse_lag"))
+    g["ARCHITECTURE"] = arch_name
+
+    from bot.architectures import load_architecture
+    spec = load_architecture(arch_name)
+    g["_ARCH_SPEC"] = spec
+
+    # Merge architecture's extra_globals as defaults
+    for key, val in (spec.get("extra_globals") or {}).items():
+        if key not in g:
+            g[key] = val
+
+    # Apply config overrides (these take priority over architecture defaults)
     applied = []
     for key, val in overrides.items():
         if key.startswith("_"):
@@ -106,10 +128,12 @@ def load_config(name):
             applied.append(key)
 
     if applied:
-        print("Config: {} ({} overrides)".format(config_path, len(applied)))
+        print("Config: {} ({} overrides, arch={})".format(config_path, len(applied), arch_name))
+    else:
+        print("Config: {} (arch={})".format(config_path, arch_name))
 
 TRADE_COLS = [
-    "timestamp", "window_start", "combo", "direction", "impulse_bps",
+    "timestamp", "window_start", "architecture", "combo", "direction", "impulse_bps",
     "time_remaining", "best_bid", "best_ask", "mid", "spread",
     "fill_price", "levels_consumed", "slippage", "fee",
     "effective_entry_taker", "effective_entry_maker", "filled_size",
@@ -136,6 +160,14 @@ COMBO_PARAMS = [
     {"name": "K_5bp_60s", "btc_threshold_bp": 5, "lookback_s": 60},
     {"name": "L_10bp_60s", "btc_threshold_bp": 10, "lookback_s": 60},
 ]
+
+# If set in config, only these combos will be active (list of names)
+# e.g. ["A_5bp_30s", "B_7bp_30s", "E_5bp_15s"]
+ENABLED_COMBOS = None  # None = all combos active
+
+# Architecture system — each session declares which strategy it uses
+ARCHITECTURE = "impulse_lag"  # default, overridden by config
+_ARCH_SPEC = None  # loaded at startup
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -216,8 +248,12 @@ class State:
         self.pending_skips = []
         self.skip_buffer = []
         self.skip_prints_this_window = 0
-        # Combos
-        self.combos = [Combo(**p) for p in COMBO_PARAMS]
+        self.architecture = ARCHITECTURE
+        # Combos — use architecture combo_params if loaded, else default
+        params = _ARCH_SPEC["combo_params"] if _ARCH_SPEC else COMBO_PARAMS
+        self.combos = [Combo(**{k: v for k, v in p.items()
+                                if k in ("name", "btc_threshold_bp", "lookback_s")})
+                       for p in params]
         # Persistence
         self.trade_csv_buffer = []
         # Errors
@@ -332,7 +368,13 @@ async def binance_ws_loop():
                     if current_s != state.last_recorded_second:
                         state.price_buffer.append((current_s, price))
                         state.last_recorded_second = current_s
-                        check_signals_sync(current_s)
+                        # Architecture dispatch
+                        if _ARCH_SPEC:
+                            if _ARCH_SPEC.get("on_tick"):
+                                _ARCH_SPEC["on_tick"](state, price, current_s)
+                            _ARCH_SPEC["check_signals"](state, current_s)
+                        else:
+                            check_signals_sync(current_s)
         except asyncio.CancelledError:
             return
         except Exception:
@@ -560,6 +602,7 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
     total_cost = round(notional + total_fee + total_slip, 2)  # everything you spend
 
     trade = {
+        "architecture": ARCHITECTURE,
         "combo": combo.name, "window_start": state.window_start,
         "timestamp": time.time(), "time_remaining": round(time_remaining, 1),
         "direction": direction, "impulse_bps": round(impulse_bps, 2),
@@ -823,6 +866,7 @@ def write_session_stats():
 
     stats = {
         "instance": INSTANCE,
+        "architecture": ARCHITECTURE,
         "updated": time.time(),
         "started": state.completed_windows[0]["window_start"] if state.completed_windows else 0,
         "trades": total_trades,
@@ -926,17 +970,15 @@ def check_signals_sync(now_s):
                      "impulse {:.0f}bp > {}bp".format(abs(impulse_bps), MAX_IMPULSE_BP))
             continue
 
-        # F2: Entry price range
-        if entry_price < MIN_ENTRY_PRICE or entry_price > MAX_ENTRY_PRICE:
+        # F2: Entry price range (using actual cost — what you really pay per share)
+        # YES/UP: actual cost = YES price (entry_price)
+        # NO/DOWN: actual cost = 1 - YES price (NO token price)
+        actual_cost = entry_price if direction == "YES" else (1.0 - entry_price)
+        if actual_cost < MIN_ENTRY_PRICE or actual_cost > MAX_ENTRY_PRICE:
             log_skip(combo.name, direction, entry_price, impulse_bps, time_remaining,
-                     "entry {:.0f}c outside {:.0f}-{:.0f}c".format(
-                         entry_price * 100, MIN_ENTRY_PRICE * 100, MAX_ENTRY_PRICE * 100))
-            continue
-
-        # F3: DOWN-specific minimum
-        if direction == "NO" and entry_price < DOWN_MIN_ENTRY:
-            log_skip(combo.name, direction, entry_price, impulse_bps, time_remaining,
-                     "DOWN entry {:.0f}c < {:.0f}c".format(entry_price * 100, DOWN_MIN_ENTRY * 100))
+                     "actual cost {:.0f}c outside {:.0f}-{:.0f}c (YES={:.0f}c, dir={})".format(
+                         actual_cost * 100, MIN_ENTRY_PRICE * 100, MAX_ENTRY_PRICE * 100,
+                         entry_price * 100, direction))
             continue
 
         # F4: Dead zone
@@ -961,6 +1003,8 @@ async def window_manager():
 
             if state.window_active and state.window_end > 0 and now >= state.window_end:
                 state.window_active = False
+                if _ARCH_SPEC and _ARCH_SPEC.get("on_window_end"):
+                    _ARCH_SPEC["on_window_end"](state)
                 prev_ws = state.window_start
 
                 # INSTANT settlement from book mid — no waiting
@@ -1027,6 +1071,8 @@ async def window_manager():
                     await wait(WINDOW_BUFFER_START - elapsed)
 
                 state.window_active = True
+                if _ARCH_SPEC and _ARCH_SPEC.get("on_window_start"):
+                    _ARCH_SPEC["on_window_start"](state)
                 continue
 
             if time.time() % FLUSH_INTERVAL < 1:
@@ -1177,9 +1223,14 @@ def run_analysis():
 # ══════════════════════════════════════════════════════════════════
 async def run():
     print("{}Paper Trading Bot v2 — Heuristic C{}".format(BOLD, RST))
-    print("Filters: entry {:.0f}-{:.0f}c, impulse <{}bp, dead zone T-{}-{}s, spread <{:.0f}c".format(
+    print("Architecture: {}".format(ARCHITECTURE))
+    print("Filters: actual cost {:.0f}-{:.0f}c, impulse <{}bp, dead zone T-{}-{}s, spread <{:.0f}c".format(
         MIN_ENTRY_PRICE * 100, MAX_ENTRY_PRICE * 100, MAX_IMPULSE_BP,
         DEAD_ZONE_START, DEAD_ZONE_END, MAX_SPREAD * 100))
+    if ENABLED_COMBOS:
+        print("Enabled combos: {}".format(", ".join(ENABLED_COMBOS)))
+    else:
+        print("Combos: {} active".format(len(state.combos)))
     print("Sizing: ${}/trade, max {} shares, {}% risk cap".format(
         BASE_TRADE_DOLLARS, MAX_SHARES, int(MAX_RISK_PCT * 100)))
     print("Combos: {}".format(", ".join(c.name for c in state.combos)))
@@ -1277,6 +1328,20 @@ def main():
     if args.instance != "default":
         set_instance(args.instance)
         print("Instance: {}".format(args.instance))
+
+    # Ensure architecture is loaded even if no config file
+    if _ARCH_SPEC is None:
+        from bot.architectures import load_architecture
+        globals()["_ARCH_SPEC"] = load_architecture(ARCHITECTURE)
+
+    # Rebuild combos from architecture spec + apply ENABLED_COMBOS filter
+    params = _ARCH_SPEC["combo_params"] if _ARCH_SPEC else COMBO_PARAMS
+    state.combos = [Combo(**{k: v for k, v in p.items()
+                             if k in ("name", "btc_threshold_bp", "lookback_s")})
+                    for p in params]
+    if ENABLED_COMBOS:
+        state.combos = [c for c in state.combos if c.name in ENABLED_COMBOS]
+    state.architecture = ARCHITECTURE
 
     def handle_sig(sig, frame):
         state.running = False
