@@ -1,0 +1,9 @@
+{
+    "_description": "Impulse lag LOOSE — low thresholds, trades a lot",
+    "MIN_ENTRY_PRICE": 0.05,
+    "MAX_ENTRY_PRICE": 0.95,
+    "MAX_IMPULSE_BP": 50,
+    "DEAD_ZONE_START": 0,
+    "DEAD_ZONE_END": 0,
+    "ENABLED_COMBOS": ["G_3bp_10s", "E_5bp_15s", "A_5bp_30s"]
+}

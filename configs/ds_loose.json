@@ -1,0 +1,7 @@
+{
+    "_description": "Delta sniper LOOSE — 1c gap, any fair prob",
+    "ARCHITECTURE": "delta_sniper",
+    "DS_MIN_ENTRY_PRICE": 0.10,
+    "DS_MAX_ENTRY_PRICE": 0.95,
+    "ENABLED_COMBOS": ["DS_2c_gap", "DS_3c_gap"]
+}

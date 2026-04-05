@@ -1,0 +1,8 @@
+{
+    "_description": "Micro scalp LOOSE — 2 signals enough, any delta",
+    "ARCHITECTURE": "micro_scalp",
+    "MS_MIN_DELTA_BPS": 0.5,
+    "MS_MIN_IMBALANCE": 1.2,
+    "MS_MIN_FAIR_GAP": 0.01,
+    "ENABLED_COMBOS": ["MS_2sig", "MS_delta", "MS_impulse_imb"]
+}

@@ -42,6 +42,7 @@ MAX_ENTRY_PRICE = 0.80    # let the strategy trade, filters were too tight
 DOWN_MIN_ENTRY = 0.25     # slight floor for DOWN
 MAX_IMPULSE_BP = 25       # 30+bp: 0% win -$4,672. 20-30bp: 77% win, keep it
 MAX_SPREAD = 0.03
+MAX_SLIPPAGE = 0.05         # reject fills > 5c worse than best price
 MIN_BOOK_LEVELS = 3
 
 # Time filters (from 1,274-trade paper data)
@@ -600,6 +601,9 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
         eff_taker = fill_price - fee
         slippage = book.best_bid - fill_price
 
+    if abs(slippage) > MAX_SLIPPAGE:
+        return
+
     maker_rebate = book.mid * (1 - book.mid) * 0.072 * 0.20
     eff_maker = book.mid - maker_rebate if direction == "YES" else book.mid + maker_rebate
 
@@ -1085,10 +1089,14 @@ async def window_manager():
                 state.window_active = True
                 if _ARCH_SPEC and _ARCH_SPEC.get("on_window_start"):
                     _ARCH_SPEC["on_window_start"](state)
+                write_session_stats()  # immediately push new window to stats.json
                 continue
 
             if time.time() % FLUSH_INTERVAL < 1:
                 flush_csvs()
+            # Write stats every 3s for real-time dashboard
+            if time.time() % 3 < 1:
+                write_session_stats()
     finally:
         await http.aclose()
 
@@ -1362,6 +1370,13 @@ async def run():
 
 
 def main():
+    # Fix __main__ vs bot.paper_trade_v2 module duplication.
+    # When run as a script, this module is loaded as __main__.
+    # Architectures import bot.paper_trade_v2, creating a SECOND copy with separate globals.
+    # Register __main__ as bot.paper_trade_v2 so both names share the same state.
+    import sys as _sys
+    _sys.modules["bot.paper_trade_v2"] = _sys.modules[__name__]
+
     import argparse
     parser = argparse.ArgumentParser(description="Polymarket Paper Trading Bot v2")
     parser.add_argument("--instance", default="default", help="Instance name for multi-run support")
@@ -1373,10 +1388,15 @@ def main():
         set_instance(args.instance)
         print("Instance: {}".format(args.instance))
 
-    # Ensure architecture is loaded even if no config file
+    # Ensure architecture is loaded
+    global _ARCH_SPEC
     if _ARCH_SPEC is None:
         from bot.architectures import load_architecture
-        globals()["_ARCH_SPEC"] = load_architecture(ARCHITECTURE)
+        _ARCH_SPEC = load_architecture(ARCHITECTURE)
+
+    # VERIFY config applied correctly
+    print("Verified: MIN_ENTRY={:.2f} MAX_ENTRY={:.2f} _ARCH_SPEC={}".format(
+        MIN_ENTRY_PRICE, MAX_ENTRY_PRICE, _ARCH_SPEC["name"] if _ARCH_SPEC else "None"))
 
     # Rebuild combos from architecture spec + apply ENABLED_COMBOS filter
     params = _ARCH_SPEC["combo_params"] if _ARCH_SPEC else COMBO_PARAMS

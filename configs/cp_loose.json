@@ -1,0 +1,5 @@
+{
+    "_description": "Certainty premium LOOSE — z>1.2, winner below 96c",
+    "ARCHITECTURE": "certainty_premium",
+    "ENABLED_COMBOS": ["CP_z1.5_60s_95c", "CP_z1.5_30s_95c", "CP_z1.5_60s_92c"]
+}

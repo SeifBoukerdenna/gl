@@ -1,0 +1,5 @@
+{
+    "_description": "Micro scalp — fire when 2+ signals agree (delta+imbalance+fair gap+impulse)",
+    "ARCHITECTURE": "micro_scalp",
+    "ENABLED_COMBOS": ["MS_2sig", "MS_3sig", "MS_delta"]
+}

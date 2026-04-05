@@ -1,89 +1,111 @@
 """
-Polymarket Bot Dashboard — Professional AIO monitoring UI
+Polymarket Bot Dashboard — Real-time WebSocket-powered UI
 localhost:5555
 
-Pages: Overview | Session Detail | All Trades | Analysis
-Live polling with targeted DOM updates, dark theme.
+VPS data streams in via WebSocket relay (port 8765).
+Frontend receives Server-Sent Events (SSE) for real-time updates.
+No polling, no SSH, no scp for live data.
 """
 
+import asyncio
 import csv
 import json
 import os
+import queue
 import subprocess
 import threading
 import time
 from pathlib import Path
 from datetime import datetime
 
-from flask import Flask, render_template_string, jsonify, request, redirect, flash, send_file
+from flask import Flask, Response, render_template_string, jsonify, request, redirect, flash, send_file
 
 app = Flask(__name__)
 app.secret_key = "pm-bot-dash"
 
 CONFIGS_DIR = Path("configs")
 DATA_DIR = Path("data")
+VPS_HOST = "167.172.50.38"
+VPS_WS_PORT = 8765
 
 # ══════════════════════════════════════════════════════════════
-# Background VPS stats cache — scps all stats.json every 3s
+# Real-time VPS cache — updated via WebSocket relay
 # ══════════════════════════════════════════════════════════════
 _vps_cache = {}  # name -> stats dict
 _vps_cache_lock = threading.Lock()
-_vps_sessions_cache = []
-_vps_sessions_lock = threading.Lock()
+_vps_connected = [False]
+_sse_subscribers = []  # list of queue.Queue for SSE clients
 
 
-def _bg_vps_sync():
-    """Background thread: sync stats.json from all VPS sessions every 3s."""
+def _push_sse(data):
+    """Push data to all SSE subscribers."""
+    msg = json.dumps(data)
+    dead = []
+    for q in _sse_subscribers:
+        try:
+            q.put_nowait(msg)
+        except queue.Full:
+            dead.append(q)
+    for q in dead:
+        try:
+            _sse_subscribers.remove(q)
+        except ValueError:
+            pass
+
+
+def _bg_vps_ws():
+    """Background thread: connect to VPS WebSocket relay for real-time stats."""
+    import websockets.sync.client as ws_client
+
     while True:
         try:
-            # Get list of VPS sessions
-            raw = ssh_cmd("""
-                for svc in $(systemctl list-units 'polymarket-bot@*' 'polymarket-mr@*' --no-pager --no-legend 2>/dev/null | awk '{print $1}'); do
-                    INST=$(echo $svc | sed 's/polymarket-bot@//;s/polymarket-mr@//;s/\\.service//')
-                    echo "$INST"
-                done
-            """)
-            vps_names = [n.strip() for n in raw.strip().split("\n") if n.strip()]
+            url = "ws://{}:{}".format(VPS_HOST, VPS_WS_PORT)
+            with ws_client.connect(url, open_timeout=5, close_timeout=3) as ws:
+                _vps_connected[0] = True
+                print("[ws] Connected to VPS relay at {}".format(url))
 
-            # Batch scp all stats.json in one SSH call
-            if vps_names:
-                stats_raw = ssh_cmd("""
-                    for INST in {}; do
-                        F="/opt/polymarket-bot/data/$INST/stats.json"
-                        if [ -f "$F" ]; then
-                            echo "===INST:$INST==="
-                            cat "$F"
-                        fi
-                    done
-                """.format(" ".join(vps_names)))
+                while True:
+                    try:
+                        raw = ws.recv(timeout=10)
+                    except TimeoutError:
+                        # Send ping to keep alive
+                        ws.send(json.dumps({"type": "ping"}))
+                        continue
 
-                with _vps_cache_lock:
-                    current = None
-                    buf = ""
-                    for line in stats_raw.split("\n"):
-                        if line.startswith("===INST:") and line.endswith("==="):
-                            if current and buf.strip():
-                                try:
-                                    _vps_cache[current] = json.loads(buf)
-                                except Exception:
-                                    pass
-                            current = line[8:-3]
-                            buf = ""
-                        else:
-                            buf += line + "\n"
-                    if current and buf.strip():
-                        try:
-                            _vps_cache[current] = json.loads(buf)
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+                    data = json.loads(raw)
+                    msg_type = data.get("type")
+
+                    if msg_type == "full_state":
+                        with _vps_cache_lock:
+                            _vps_cache.clear()
+                            _vps_cache.update(data.get("sessions", {}))
+                        _push_sse({"type": "full_state", "sessions": data.get("sessions", {})})
+
+                    elif msg_type == "update":
+                        changed = data.get("changed", {})
+                        removed = data.get("removed", [])
+                        with _vps_cache_lock:
+                            _vps_cache.update(changed)
+                            for name in removed:
+                                _vps_cache.pop(name, None)
+                        if changed or removed:
+                            _push_sse({"type": "update", "changed": changed, "removed": removed})
+
+                    elif msg_type == "pong":
+                        pass
+
+                    elif msg_type == "trades":
+                        _push_sse(data)
+
+        except Exception as e:
+            _vps_connected[0] = False
+            print("[ws] VPS relay disconnected: {}. Retrying in 3s...".format(e))
         time.sleep(3)
 
 
-# Start background sync thread
-_bg_thread = threading.Thread(target=_bg_vps_sync, daemon=True)
-_bg_thread.start()
+# Start WebSocket client thread
+_ws_thread = threading.Thread(target=_bg_vps_ws, daemon=True)
+_ws_thread.start()
 
 KNOB_DEFS = {
     "BASE_TRADE_DOLLARS": {"default": 100, "desc": "$ per trade", "min": 1, "max": 10000, "step": 1},
@@ -313,6 +335,38 @@ def get_all_trades():
     return all_trades
 
 
+def _compute_risk_metrics(pnls):
+    """Compute Sharpe, Sortino, MaxDD from a list of per-trade PnL values."""
+    import math
+    n = len(pnls)
+    if n < 2:
+        return {"sharpe": 0, "sortino": 0, "max_dd": 0, "best": 0, "worst": 0}
+    mean = sum(pnls) / n
+    var = sum((p - mean) ** 2 for p in pnls) / (n - 1)
+    std = math.sqrt(var) if var > 0 else 0.001
+    sharpe = round(mean / std, 2)
+    downside = [p for p in pnls if p < 0]
+    if downside:
+        dd_std = math.sqrt(sum(p ** 2 for p in downside) / len(downside))
+        sortino = round(mean / dd_std, 2) if dd_std > 0 else 0
+    else:
+        sortino = 99.99 if mean > 0 else 0
+    max_dd = 0
+    cum = 0
+    peak = 0
+    for p in pnls:
+        cum += p
+        if cum > peak:
+            peak = cum
+        dd = peak - cum
+        if dd > max_dd:
+            max_dd = dd
+    return {
+        "sharpe": sharpe, "sortino": sortino,
+        "max_dd": round(max_dd), "best": round(max(pnls), 1), "worst": round(min(pnls), 1),
+    }
+
+
 def get_analysis_data():
     """Build analysis summary from CSV data for the analysis page."""
     skip = {"_archive_20260403"}
@@ -348,6 +402,9 @@ def get_analysis_data():
         wins = sum(1 for t in trades if t["result"].strip() == "WIN")
         pnl = sum(float(t.get("pnl_taker", 0) or 0) for t in trades)
         wr = round(wins / n * 100, 1) if n > 0 else 0
+        pnl_list = [float(t.get("pnl_taker", 0) or 0) for t in trades]
+        risk = _compute_risk_metrics(pnl_list)
+        arch = _get_session_architecture(d.name)
 
         # Combo breakdown
         combos = {}
@@ -379,8 +436,11 @@ def get_analysis_data():
         has_charts = (Path("output") / d.name / "cum_pnl.png").exists()
 
         session_summaries.append({
-            "name": d.name, "trades": n, "wins": wins, "wr": wr,
+            "name": d.name, "architecture": arch,
+            "trades": n, "wins": wins, "wr": wr,
             "pnl": round(pnl), "avg_pnl": round(pnl / n, 1) if n > 0 else 0,
+            "sharpe": risk["sharpe"], "sortino": risk["sortino"],
+            "max_dd": risk["max_dd"], "best": risk["best"], "worst": risk["worst"],
             "combos": combo_list, "has_charts": has_charts,
         })
 
@@ -388,8 +448,57 @@ def get_analysis_data():
     all_combos.sort(key=lambda x: x["pnl"], reverse=True)
     has_comparison = Path("output/comparison/all_sessions_cum_pnl.png").exists()
 
+    # Per-architecture aggregation
+    arch_map = {}
+    for s in session_summaries:
+        a = s["architecture"]
+        if a not in arch_map:
+            arch_map[a] = {"trades": 0, "wins": 0, "pnl": 0.0, "pnl_list": []}
+        arch_map[a]["trades"] += s["trades"]
+        arch_map[a]["wins"] += s["wins"]
+        arch_map[a]["pnl"] += s["pnl"]
+    # Re-read per-trade PnLs for architecture-level risk metrics
+    for d in sorted(DATA_DIR.iterdir()):
+        if not d.is_dir() or d.name in skip or d.name.startswith("_"):
+            continue
+        arch = _get_session_architecture(d.name)
+        if arch not in arch_map:
+            continue
+        csv_path = None
+        for fname in ["trades.csv", "paper_trades_v2.csv"]:
+            p = d / fname
+            if p.exists():
+                csv_path = p
+                break
+        if not csv_path:
+            continue
+        try:
+            with open(csv_path) as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if (row.get("result") or "").strip() in ("WIN", "LOSS"):
+                        arch_map[arch]["pnl_list"].append(float(row.get("pnl_taker", 0) or 0))
+        except Exception:
+            pass
+
+    arch_summaries = []
+    for a, v in arch_map.items():
+        n = v["trades"]
+        risk = _compute_risk_metrics(v["pnl_list"]) if len(v["pnl_list"]) >= 2 else {"sharpe": 0, "sortino": 0, "max_dd": 0, "best": 0, "worst": 0}
+        arch_summaries.append({
+            "architecture": a, "trades": n,
+            "wins": v["wins"],
+            "wr": round(v["wins"] / n * 100, 1) if n > 0 else 0,
+            "pnl": round(v["pnl"]),
+            "avg_pnl": round(v["pnl"] / n, 1) if n > 0 else 0,
+            "sharpe": risk["sharpe"], "sortino": risk["sortino"],
+            "max_dd": risk["max_dd"],
+        })
+    arch_summaries.sort(key=lambda x: x["sharpe"], reverse=True)
+
     return {
         "sessions": session_summaries,
+        "architectures": arch_summaries,
         "best_combos": all_combos[:20],
         "has_comparison": has_comparison,
     }
@@ -559,9 +668,56 @@ th:first-child{border-radius:8px 0 0 0}th:last-child{border-radius:0 8px 0 0}
 </head>
 <body>
 <div class="shell">
+
+<!-- Global Window Banner -->
+<div style="background:linear-gradient(135deg,var(--bg2),#0f1420);border-bottom:1px solid var(--border);padding:6px 24px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;flex-shrink:0">
+  <!-- Left: Timer + Window -->
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="logo" onclick="navigate('overview')" style="font-size:14px;cursor:pointer">PM</div>
+    <span class="mono" style="font-size:26px;font-weight:800;letter-spacing:-1px" id="g-timer">0:00</span>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <div style="height:3px;width:100px;background:var(--border);border-radius:2px;overflow:hidden">
+        <div id="g-progress" style="height:100%;background:var(--blue);border-radius:2px;width:0%;transition:width 1s linear"></div>
+      </div>
+      <span class="mono d" style="font-size:10px" id="g-window">\u2014</span>
+    </div>
+  </div>
+  <!-- Center: BTC Price + PTB -->
+  <div style="display:flex;align-items:center;justify-content:center;gap:24px">
+    <div style="text-align:center">
+      <div class="d mono" style="font-size:8px;letter-spacing:1px">BTC PRICE</div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span class="mono" style="font-size:20px;font-weight:800" id="g-btc">\u2014</span>
+        <span class="mono" style="font-size:12px;font-weight:700" id="g-btc-delta"></span>
+      </div>
+    </div>
+    <div style="width:1px;height:28px;background:var(--border)"></div>
+    <div style="text-align:center">
+      <div class="d mono" style="font-size:8px;letter-spacing:1px">PRICE TO BEAT</div>
+      <span class="mono" style="font-size:16px;font-weight:700;color:var(--yellow)" id="g-ptb">\u2014</span>
+    </div>
+    <div style="width:1px;height:28px;background:var(--border)"></div>
+    <div style="text-align:center">
+      <div class="d mono" style="font-size:8px;letter-spacing:1px">DELTA</div>
+      <span class="mono" style="font-size:16px;font-weight:700" id="g-delta">\u2014</span>
+    </div>
+  </div>
+  <!-- Right: PM Book YES/NO -->
+  <div style="display:flex;align-items:center;gap:14px">
+    <div style="text-align:center">
+      <div class="d mono" style="font-size:8px;letter-spacing:1px">YES (UP)</div>
+      <span class="mono g" style="font-size:16px;font-weight:700" id="g-yes">\u2014</span>
+    </div>
+    <div style="text-align:center">
+      <div class="d mono" style="font-size:8px;letter-spacing:1px">NO (DOWN)</div>
+      <span class="mono r" style="font-size:16px;font-weight:700" id="g-no">\u2014</span>
+    </div>
+  </div>
+</div>
+
+<!-- Nav bar -->
 <div class="topbar">
   <div class="topbar-left">
-    <div class="logo" onclick="navigate('overview')">POLYMARKET BOT</div>
     <div class="nav">
       <div class="nav-item active" data-page="overview" onclick="navigate('overview')">Overview</div>
       <div class="nav-item" data-page="trades" onclick="navigate('trades')">All Trades</div>
@@ -591,7 +747,7 @@ const S = {
 // ═══ Helpers ═══
 async function api(url) { return (await fetch(url)).json(); }
 function ft(ts) { return ts ? new Date(ts*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '\u2014'; }
-function ftDate(ts) { if(!ts) return '\u2014'; const d=new Date(ts*1000); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); }
+function ftDate(ts) { if(!ts) return '\u2014'; const d=new Date(ts*1000); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
 function ago(ts) { if(!ts) return '\u2014'; const d=Math.floor(Date.now()/1000-ts); return d<60?d+'s ago':d<3600?Math.floor(d/60)+'m ago':Math.floor(d/3600)+'h'+Math.floor((d%3600)/60)+'m ago'; }
 function winRange(ws) { if(!ws) return '\u2014'; const s=new Date(ws*1000),e=new Date((ws+300)*1000); return s.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})+' \u2013 '+e.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); }
 function pc(v){return v>0?'g':v<0?'r':'d'}
@@ -628,8 +784,19 @@ async function loadSessions() {
 
 async function loadSession(name) {
     const el = document.getElementById('content');
-    if (!S.sessionData[name]) el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading '+name+'...</div>';
-    try { S.sessionData[name] = await api('/api/session/'+name); render(); } catch(e) { render(); }
+    // INSTANT: render from SSE cache first (no network call)
+    if(_sseVpsCache[name]) {
+        S.sessionData[name] = Object.assign(S.sessionData[name] || {}, _sseVpsCache[name]);
+        render();
+    } else {
+        el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading '+name+'...</div>';
+    }
+    // BACKGROUND: fetch full CSV trade log (slower, non-blocking)
+    try {
+        const full = await api('/api/session/'+name);
+        S.sessionData[name] = full;
+        render();
+    } catch(e) {}
 }
 
 async function loadAllTrades() {
@@ -665,23 +832,72 @@ function updateOverview() {
 }
 
 // ═══ Overview ═══
+S._ovSort='pnl'; S._ovArch=''; S._ovDir='desc';
+function _ovSortSessions(ss){
+    const key=S._ovSort, dir=S._ovDir==='desc'?-1:1;
+    return [...ss].sort((a,b)=>{
+        let va,vb;
+        if(key==='pnl'){va=a.pnl_taker||0;vb=b.pnl_taker||0}
+        else if(key==='wr'){va=a.wr||0;vb=b.wr||0}
+        else if(key==='trades'){va=a.trades||0;vb=b.trades||0}
+        else if(key==='avg'){va=a.trades?(a.pnl_taker||0)/a.trades:0;vb=b.trades?(b.pnl_taker||0)/b.trades:0}
+        else if(key==='name'){return dir*a.name.localeCompare(b.name)}
+        else if(key==='arch'){return dir*(a.architecture||'').localeCompare(b.architecture||'')}
+        else{va=a.pnl_taker||0;vb=b.pnl_taker||0}
+        return dir*(va-vb);
+    });
+}
+function ovSetSort(key){
+    if(S._ovSort===key) S._ovDir=S._ovDir==='desc'?'asc':'desc';
+    else{S._ovSort=key;S._ovDir='desc'}
+    renderOverview(document.getElementById('content'));
+}
+function ovSetArch(arch){S._ovArch=arch;renderOverview(document.getElementById('content'))}
 function renderOverview(el) {
-    const ss = S.sessions;
+    let ss = S.sessions;
     if (!ss.length) { el.innerHTML = '<div class="empty"><div style="font-size:28px;opacity:.3">&#x1f4e1;</div><div class="empty-title">No sessions with data</div><div class="d" style="margin-top:4px;font-size:11px">Run <code>pm pull</code> to sync VPS data, or start a new session</div></div>'; return; }
 
-    const tot = ss.reduce((a,s) => a+(s.trades||0), 0);
-    const pnl = ss.reduce((a,s) => a+(s.pnl_taker||0), 0);
-    const wins = ss.reduce((a,s) => a+(s.wins||0), 0);
+    // Collect unique architectures
+    const allArchs=[...new Set(ss.map(s=>s.architecture||'impulse_lag'))].sort();
+
+    // Filter by architecture
+    const filtered=S._ovArch?ss.filter(s=>(s.architecture||'impulse_lag')===S._ovArch):ss;
+
+    const tot = filtered.reduce((a,s) => a+(s.trades||0), 0);
+    const pnl = filtered.reduce((a,s) => a+(s.pnl_taker||0), 0);
+    const wins = filtered.reduce((a,s) => a+(s.wins||0), 0);
     const wr = tot > 0 ? (wins/tot*100).toFixed(1) : 0;
-    const act = ss.filter(s => s.status==='running'||s.status==='active').length;
+    const act = filtered.filter(s => s.status==='running'||s.status==='active').length;
     const avg = tot > 0 ? pnl/tot : 0;
-    const sorted = [...ss].sort((a,b) => (b.pnl_taker||0)-(a.pnl_taker||0));
+    const sorted = _ovSortSessions(filtered);
+
+    // Architecture summary pills
+    const archStats={};
+    ss.forEach(s=>{const a=s.architecture||'impulse_lag';if(!archStats[a])archStats[a]={pnl:0,trades:0,wins:0,sessions:0};archStats[a].pnl+=(s.pnl_taker||0);archStats[a].trades+=(s.trades||0);archStats[a].wins+=(s.wins||0);archStats[a].sessions++});
+    let archPills='<button class="btn btn-sm'+(S._ovArch?'':' btn-blue')+'" style="font-size:10px;padding:3px 10px" onclick="ovSetArch(\'\')">All</button>';
+    Object.entries(archStats).sort((a,b)=>b[1].pnl-a[1].pnl).forEach(([a,v])=>{
+        const active=S._ovArch===a;
+        const awr=v.trades>0?(v.wins/v.trades*100).toFixed(0):'0';
+        archPills+=`<button class="btn btn-sm${active?' btn-blue':''}" style="font-size:10px;padding:3px 10px" onclick="ovSetArch('${a}')">
+            ${a.replace(/_/g,' ')} <span class="${pc(v.pnl)}" style="font-weight:700">${fp(v.pnl)}</span>
+            <span class="d">${v.trades}t ${awr}%</span></button>`;
+    });
+
+    // Sort indicator
+    const sortKeys=[{k:'pnl',l:'PnL'},{k:'wr',l:'WR'},{k:'trades',l:'Trades'},{k:'avg',l:'$/Trade'},{k:'name',l:'Name'},{k:'arch',l:'Arch'}];
+    let sortBtns='';
+    sortKeys.forEach(({k,l})=>{
+        const active=S._ovSort===k;
+        const arrow=active?(S._ovDir==='desc'?'\u25BC':'\u25B2'):'';
+        sortBtns+=`<button class="btn btn-sm${active?' btn-blue':''}" style="font-size:10px;padding:2px 8px" onclick="ovSetSort('${k}')">${l} ${arrow}</button>`;
+    });
 
     let cards = '';
     sorted.forEach((s,i) => {
         const p=s.pnl_taker||0, w=s.wr||0, active=s.status==='running'||s.status==='active';
         const cls=p>0?'positive':p<0?'negative':'zero';
         const bc=w>=60?'var(--green)':w>=50?'var(--yellow)':'var(--red)';
+        const avgP=s.trades>0?p/s.trades:0;
         cards += `<div class="session-card ${cls}" onclick="navigate('session','${s.name}')">
           <div class="sc-top"><div><span class="d mono" style="font-size:10px;font-weight:700">#${i+1}</span> <span class="sc-name">${s.name}</span></div>
           <div style="display:flex;align-items:center;gap:5px"><span class="sc-where">${s.architecture||'impulse_lag'}</span><span class="sc-where">${s.where}</span><div class="sc-dot ${active?'on':'off'}"></div></div></div>
@@ -689,22 +905,28 @@ function renderOverview(el) {
             <div><div class="sc-stat-label">PnL</div><div class="sc-stat-value ${pc(p)}">${fp(p)}</div></div>
             <div><div class="sc-stat-label">Win Rate</div><div class="sc-stat-value ${wc(w)}">${w}%</div></div>
             <div><div class="sc-stat-label">Trades</div><div class="sc-stat-value">${s.trades||0}</div></div>
-            <div><div class="sc-stat-label">$/Trade</div><div class="sc-stat-value ${pc(p)}">${s.trades>0?fps(p/s.trades):'\u2014'}</div></div>
+            <div><div class="sc-stat-label">$/Trade</div><div class="sc-stat-value ${pc(avgP)}">${s.trades>0?fps(avgP):'\u2014'}</div></div>
           </div>
           <div class="sc-bar"><div class="sc-bar-fill" style="width:${Math.min(100,w)}%;background:${bc}"></div></div>
         </div>`;
     });
-    if (!ss.length) cards = '<div class="empty"><div style="font-size:28px;opacity:.3">&#x1f4e1;</div><div class="empty-title">No sessions found</div></div>';
+    if (!filtered.length) cards = '<div class="empty"><div class="empty-title">No sessions match filter</div></div>';
 
     el.innerHTML = `
     <div class="section-header"><div class="section-title">Overview</div><div class="d mono" style="font-size:10px">Updated ${new Date().toLocaleTimeString()}</div></div>
     <div class="stats-grid">
-      <div class="stat-box"><div class="stat-label">Total PnL</div><div class="stat-value ${pc(pnl)}">${fp(pnl)}</div><div class="stat-sub">${fps(avg)} / trade</div></div>
-      <div class="stat-box"><div class="stat-label">Total Trades</div><div class="stat-value b">${tot.toLocaleString()}</div><div class="stat-sub">${ss.length} sessions</div></div>
+      <div class="stat-box"><div class="stat-label">Total PnL${S._ovArch?' ('+S._ovArch.replace(/_/g,' ')+')':''}</div><div class="stat-value ${pc(pnl)}">${fp(pnl)}</div><div class="stat-sub">${fps(avg)} / trade</div></div>
+      <div class="stat-box"><div class="stat-label">Total Trades</div><div class="stat-value b">${tot.toLocaleString()}</div><div class="stat-sub">${filtered.length}${S._ovArch?' / '+ss.length:''} sessions</div></div>
       <div class="stat-box"><div class="stat-label">Win Rate</div><div class="stat-value ${wc(wr)}">${wr}%</div><div class="stat-sub">${wins}W / ${tot-wins}L</div></div>
       <div class="stat-box"><div class="stat-label">Active</div><div class="stat-value ${act>0?'g':'d'}">${act}</div><div class="stat-sub">sessions running</div></div>
     </div>
-    <div class="section-header" style="margin-top:20px"><div class="section-title">Sessions</div><div class="d" style="font-size:10px">Sorted by PnL</div></div>
+    <div style="margin:14px 0 6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span class="d" style="font-size:10px;margin-right:4px">FILTER</span>${archPills}
+    </div>
+    <div class="section-header" style="margin-top:10px">
+      <div class="section-title">Sessions</div>
+      <div style="display:flex;gap:4px;align-items:center"><span class="d" style="font-size:10px;margin-right:4px">SORT</span>${sortBtns}</div>
+    </div>
     <div class="sessions-grid">${cards}</div>`;
     S.lastDataJSON = JSON.stringify(ss);
 }
@@ -750,6 +972,9 @@ function renderSession(el) {
     // CSV trade log with combo filter
     const csvLog = d.csv_trade_log || [];
     const combosInLog = [...new Set(csvLog.map(t=>(t.combo||'').trim()).filter(Boolean))].sort();
+    // Detect if this is a mean_revert session (has exit_price column)
+    const isMR = csvLog.length > 0 && csvLog[0].exit_price;
+
     let tradeRows='';
     csvLog.forEach(t=>{
         const p=parseFloat(t.pnl_taker||0);
@@ -757,10 +982,23 @@ function renderSession(el) {
         const tag=result==='WIN'?'<span class="tag tag-win">WIN</span>':result==='LOSS'?'<span class="tag tag-loss">LOSS</span>':'<span class="tag tag-dead">PENDING</span>';
         const entry=t.fill_price?(parseFloat(t.fill_price)*100).toFixed(1)+'\u00a2':'?';
         const cost=t.total_cost?'$'+parseFloat(t.total_cost).toFixed(0):'\u2014';
-        const imp=t.impulse_bps?parseFloat(t.impulse_bps).toFixed(1)+'bp':'?';
-        const trem2=t.time_remaining?Math.round(parseFloat(t.time_remaining))+'s':'?';
         const ts=t.timestamp?ftDate(parseFloat(t.timestamp)):'\u2014';
-        tradeRows+=`<tr data-combo="${(t.combo||'').trim()}" data-result="${result}"><td class="d">${ts}</td><td>${(t.combo||'?').trim()}</td><td>${t.direction||'?'}</td><td>${entry}</td><td>${t.filled_size||'?'}</td><td>${cost}</td><td>${imp}</td><td>${trem2}</td><td>${tag}</td><td class="${pc(p)}" style="font-weight:700">${result?fp(p):'\u2014'}</td></tr>`;
+        if(isMR) {
+            const exitP=t.exit_price?(parseFloat(t.exit_price)*100).toFixed(1)+'\u00a2':'\u2014';
+            const holdS=t.hold_seconds?parseFloat(t.hold_seconds).toFixed(0)+'s':'\u2014';
+            const reason=t.exit_reason||'\u2014';
+            const reasonTag=reason==='target_profit'?'<span class="tag tag-win" style="font-size:8px">TARGET</span>':
+                           reason==='stop_loss'?'<span class="tag tag-loss" style="font-size:8px">STOP</span>':
+                           reason==='trailing_stop'?'<span class="tag" style="font-size:8px;background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)">TRAIL</span>':
+                           reason==='time_max_hold'?'<span class="tag tag-dead" style="font-size:8px">TIME</span>':
+                           reason==='window_end'?'<span class="tag tag-dead" style="font-size:8px">EXPIRY</span>':
+                           '<span class="d" style="font-size:9px">'+reason+'</span>';
+            tradeRows+=`<tr data-combo="${(t.combo||'').trim()}" data-result="${result}"><td class="d">${ts}</td><td>${(t.combo||'?').trim()}</td><td>${t.direction||'?'}</td><td>${entry}</td><td class="b">${exitP}</td><td>${holdS}</td><td>${t.filled_size||'?'}</td><td>${cost}</td><td>${reasonTag}</td><td>${tag}</td><td class="${pc(p)}" style="font-weight:700">${result?fp(p):'\u2014'}</td></tr>`;
+        } else {
+            const imp=t.impulse_bps?parseFloat(t.impulse_bps).toFixed(1)+'bp':'?';
+            const trem2=t.time_remaining?Math.round(parseFloat(t.time_remaining))+'s':'?';
+            tradeRows+=`<tr data-combo="${(t.combo||'').trim()}" data-result="${result}"><td class="d">${ts}</td><td>${(t.combo||'?').trim()}</td><td>${t.direction||'?'}</td><td>${entry}</td><td>${t.filled_size||'?'}</td><td>${cost}</td><td>${imp}</td><td>${trem2}</td><td>${tag}</td><td class="${pc(p)}" style="font-weight:700">${result?fp(p):'\u2014'}</td></tr>`;
+        }
     });
 
     let pills='';
@@ -815,7 +1053,7 @@ function renderSession(el) {
         <span class="d mono" style="font-size:10px" id="stc">${csvLog.length} trades</span>
       </div>
     </div>
-    ${tradeRows?`<div style="overflow-x:auto;max-height:600px;overflow-y:auto"><table id="st"><thead><tr><th>Time</th><th>Combo</th><th>Dir</th><th>Entry</th><th>Size</th><th>Cost</th><th>Impulse</th><th>T-rem</th><th>Result</th><th>PnL</th></tr></thead><tbody>${tradeRows}</tbody></table></div>`
+    ${tradeRows?`<div style="overflow-x:auto;max-height:600px;overflow-y:auto"><table id="st"><thead><tr>${isMR?'<th>Time</th><th>Combo</th><th>Dir</th><th>Entry</th><th>Exit</th><th>Hold</th><th>Size</th><th>Cost</th><th>Exit Reason</th><th>Result</th><th>PnL</th>':'<th>Time</th><th>Combo</th><th>Dir</th><th>Entry</th><th>Size</th><th>Cost</th><th>Impulse</th><th>T-rem</th><th>Result</th><th>PnL</th>'}</tr></thead><tbody>${tradeRows}</tbody></table></div>`
         :'<div class="empty"><div class="empty-title">No trades yet. Waiting for signals...</div></div>'}
     </div>
     <div style="margin-top:8px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--dim);font-family:'JetBrains Mono',monospace">
@@ -991,22 +1229,53 @@ async function renderAnalysis(el) {
     destroyCharts();
 
     const d=S.analysisData, cd=S.chartData;
-    const ss=d.sessions||[], bc=d.best_combos||[];
+    const ss=d.sessions||[], bc=d.best_combos||[], archs=d.architectures||[];
     const sessions=cd.sessions||{};
     const sortedNames=Object.keys(sessions).sort((a,b)=>(sessions[b].pnl||0)-(sessions[a].pnl||0));
+
+    // Session-level risk metrics lookup from analysis data
+    const sessRisk={};
+    ss.forEach(s=>{sessRisk[s.name]=s});
+
+    // Architecture summary cards
+    let archCards='';
+    archs.forEach(a=>{
+        const sortStr=a.sortino>=99?'INF':a.sortino.toFixed(2);
+        archCards+=`<div class="card" style="padding:14px;min-width:180px">
+            <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${a.architecture.replace(/_/g,' ')}</div>
+            <div class="${pc(a.pnl)}" style="font-size:20px;font-weight:700">${fp(a.pnl)}</div>
+            <div style="display:flex;gap:12px;margin-top:6px;font-size:11px">
+                <span>${a.trades} trades</span>
+                <span class="${wc(a.wr)}">${a.wr}%</span>
+            </div>
+            <div style="display:flex;gap:12px;margin-top:4px;font-size:10px;color:var(--dim)">
+                <span>Sharpe <b style="color:${a.sharpe>=0.5?'var(--green)':a.sharpe>=0?'var(--yellow)':'var(--red)'}">${a.sharpe.toFixed(2)}</b></span>
+                <span>Sortino <b style="color:${a.sortino>=1?'var(--green)':a.sortino>=0?'var(--yellow)':'var(--red)'}">${sortStr}</b></span>
+                <span>MaxDD <b style="color:${a.max_dd===0?'var(--green)':'var(--red)'}">$${a.max_dd}</b></span>
+            </div>
+        </div>`;
+    });
 
     // Leaderboard
     let lbRows='';
     sortedNames.forEach((name,i)=>{
         const s=sessions[name];
+        const r=sessRisk[name]||{};
+        const sharpe=r.sharpe||0;
+        const sortino=r.sortino||0;
+        const sortStr=sortino>=99?'INF':sortino.toFixed(2);
+        const maxdd=r.max_dd||0;
         lbRows+=`<tr style="cursor:pointer" onclick="navigate('session','${name}')">
             <td style="font-weight:700;color:${i<3?'var(--yellow)':'var(--dim)'}">#${i+1}</td>
             <td style="font-weight:700;color:var(--text)">${name}</td>
-            <td><span class="tag" style="background:rgba(6,182,212,.1);color:var(--cyan);border:1px solid rgba(6,182,212,.2);font-size:9px">${s.architecture||'impulse_lag'}</span></td>
+            <td><span class="tag" style="background:rgba(6,182,212,.1);color:var(--cyan);border:1px solid rgba(6,182,212,.2);font-size:9px">${s.architecture||'?'}</span></td>
             <td>${s.trades}</td>
             <td class="${wc(s.wr)}">${s.wr}%</td>
             <td class="${pc(s.pnl)}" style="font-weight:700">${fp(s.pnl)}</td>
-            <td class="${pc(s.avg_pnl)}">${fps(s.avg_pnl)}</td></tr>`;
+            <td class="${pc(s.avg_pnl)}">${fps(s.avg_pnl)}</td>
+            <td style="color:${sharpe>=0.5?'var(--green)':sharpe>=0?'var(--yellow)':'var(--red)'}">${sharpe.toFixed(2)}</td>
+            <td style="color:${sortino>=1?'var(--green)':sortino>=0?'var(--yellow)':'var(--red)'}">${sortStr}</td>
+            <td style="color:${maxdd===0?'var(--green)':'var(--red)'}">$${maxdd}</td></tr>`;
     });
 
     // Best combos
@@ -1024,7 +1293,8 @@ async function renderAnalysis(el) {
         sessionSections+=`
         <div class="analysis-section">
             <div class="analysis-section-title collapsible" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show');setTimeout(()=>buildSessionCharts('${name}'),100)">
-                ${name} <span class="badge">${s.trades} trades</span>
+                ${name} <span class="tag" style="background:rgba(6,182,212,.1);color:var(--cyan);border:1px solid rgba(6,182,212,.2);font-size:9px;margin-left:6px">${s.architecture||'?'}</span>
+                <span class="badge">${s.trades} trades</span>
                 <span class="${pc(s.pnl)}" style="font-weight:700;margin-left:auto">${fp(s.pnl)}</span>
                 <span class="${wc(s.wr)}" style="margin-left:8px">${s.wr}%</span>
             </div>
@@ -1044,8 +1314,13 @@ async function renderAnalysis(el) {
     </div>
 
     <div class="analysis-section">
+        <div class="analysis-section-title"><span style="color:var(--cyan)">&#9670;</span> Architecture Performance</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${archCards}</div>
+    </div>
+
+    <div class="analysis-section">
         <div class="analysis-section-title"><span style="color:var(--yellow)">&#9733;</span> Session Leaderboard</div>
-        <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Session</th><th>Arch</th><th>Trades</th><th>Win%</th><th>PnL</th><th>$/Trade</th></tr></thead><tbody>${lbRows}</tbody></table></div></div>
+        <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Session</th><th>Arch</th><th>Trades</th><th>Win%</th><th>PnL</th><th>$/Trade</th><th>Sharpe</th><th>Sortino</th><th>MaxDD</th></tr></thead><tbody>${lbRows}</tbody></table></div></div>
     </div>
 
     <!-- Interactive Charts -->
@@ -1238,36 +1513,258 @@ function togglePause(){
 function updateRefreshUI(){
     const el=document.getElementById('refresh-info');
     if(!el)return;
-    if(refreshPaused){
-        el.innerHTML='<span class="y" style="cursor:pointer" onclick="togglePause()">PAUSED</span> <span class="d" style="cursor:pointer;font-size:10px" onclick="togglePause()">(click to resume)</span>';
+    const connected = evtSource && evtSource.readyState === 1;
+    if(connected){
+        el.innerHTML='<span class="g mono" style="font-size:10px">LIVE</span> <span class="d" style="font-size:9px">WebSocket</span>';
     } else {
-        el.innerHTML='<span class="d" style="font-size:10px">refresh in </span><span class="b">${refreshCountdown}s</span> <span class="d" style="cursor:pointer;font-size:10px" onclick="togglePause()">[pause]</span>'.replace('${refreshCountdown}',refreshCountdown);
+        el.innerHTML='<span class="y mono" style="font-size:10px">connecting...</span>';
     }
 }
 
 // ═══ Smooth Timer — ticks locally every second ═══
+let _lastBtcPrice = 0;
+
 function tickTimer(){
+    // Update GLOBAL banner timer from any VPS session data
+    const anySession = Object.values(_sseVpsCache)[0];
+    if(anySession && anySession.window_end) {
+        const now=Date.now()/1000;
+        const trem=Math.max(0,Math.floor(anySession.window_end-now));
+        const pct=Math.min(100,((300-trem)/300)*100);
+        const gt=document.getElementById('g-timer');
+        const gp=document.getElementById('g-progress');
+        if(gt){
+            gt.textContent=Math.floor(trem/60)+':'+String(trem%60).padStart(2,'0');
+            gt.style.color=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)';
+        }
+        if(gp){gp.style.width=pct+'%';gp.style.background=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)'}
+    }
+
+    // Update session detail timer too
     const timerEl=document.getElementById('live-timer');
     const progEl=document.getElementById('live-progress');
-    if(!timerEl||S.page!=='session') return;
-    const d=S.selectedSession?S.sessionData[S.selectedSession]:null;
-    if(!d||!d.window_end) return;
-    const now=Date.now()/1000;
-    const trem=Math.max(0,Math.floor(d.window_end-now));
-    const pct=Math.min(100,((300-trem)/300)*100);
-    timerEl.textContent=Math.floor(trem/60)+':'+String(trem%60).padStart(2,'0');
-    timerEl.style.color=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)';
-    if(progEl){progEl.style.width=pct+'%';progEl.style.background=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)'}
-    // Also update overview card timers
-    document.querySelectorAll('[data-session-pnl]').forEach(el=>{
-        // CSS transition handles smooth number changes
+    if(timerEl&&S.page==='session') {
+        const d=S.selectedSession?S.sessionData[S.selectedSession]:null;
+        if(d&&d.window_end) {
+            const now=Date.now()/1000;
+            const trem=Math.max(0,Math.floor(d.window_end-now));
+            const pct=Math.min(100,((300-trem)/300)*100);
+            timerEl.textContent=Math.floor(trem/60)+':'+String(trem%60).padStart(2,'0');
+            timerEl.style.color=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)';
+            if(progEl){progEl.style.width=pct+'%';progEl.style.background=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)'}
+        }
+    }
+}
+
+function updateGlobalBanner(d){
+    // BTC price with tick delta
+    if(d.btc_price){
+        const gb=document.getElementById('g-btc');
+        const gd=document.getElementById('g-btc-delta');
+        if(gb) gb.textContent='$'+Number(d.btc_price).toLocaleString('en-US',{minimumFractionDigits:2});
+        if(gd && _lastBtcPrice > 0){
+            const diff = d.btc_price - _lastBtcPrice;
+            if(Math.abs(diff) > 0.005) {
+                gd.textContent=(diff>=0?'\u25B2':'\u25BC')+Math.abs(diff).toFixed(2);
+                gd.style.color=diff>=0?'var(--green)':'var(--red)';
+            }
+        }
+        _lastBtcPrice = d.btc_price;
+    }
+    // Price to beat
+    if(d.window_open){
+        const gp=document.getElementById('g-ptb');
+        if(gp) gp.textContent='$'+Number(d.window_open).toLocaleString('en-US',{minimumFractionDigits:2});
+    }
+    // Delta from PTB
+    if(d.btc_price && d.window_open && d.window_open > 0){
+        const corrected = d.btc_price - (d.btc_price - d.window_open); // approximate
+        const delta_bps = ((d.btc_price - d.window_open) / d.window_open * 10000);
+        const gdelta=document.getElementById('g-delta');
+        if(gdelta){
+            gdelta.textContent=(delta_bps>=0?'+':'')+delta_bps.toFixed(1)+'bp';
+            gdelta.style.color=delta_bps>=0?'var(--green)':'var(--red)';
+        }
+    }
+    // Window range
+    if(d.current_window){
+        const gw=document.getElementById('g-window');
+        if(gw) gw.textContent=winRange(d.current_window);
+    }
+    // YES/NO prices
+    if(d.book_ask){
+        const gy=document.getElementById('g-yes');
+        if(gy) gy.textContent=(d.book_ask*100).toFixed(0)+'\u00a2';
+    }
+    if(d.book_bid){
+        const gn=document.getElementById('g-no');
+        if(gn) gn.textContent=((1-d.book_bid)*100).toFixed(0)+'\u00a2';
+    }
+}
+
+// ═══ SSE Real-time Stream — PRIMARY data source ═══
+let evtSource = null;
+let _sseVpsCache = {};  // session name -> latest VPS stats
+let _lastOverviewRender = 0;
+
+function connectSSE(){
+    if(evtSource) evtSource.close();
+    evtSource = new EventSource('/api/stream');
+    evtSource.onopen = () => {
+        document.getElementById('status-dot').style.background='var(--green)';
+        document.getElementById('status-dot').style.boxShadow='0 0 8px rgba(16,185,129,.4)';
+        document.getElementById('status-label').textContent='live';
+        updateRefreshUI();
+    };
+    evtSource.onmessage = (e) => {
+        try {
+            const data = JSON.parse(e.data);
+            if(data.type === 'full_state' || data.type === 'update') {
+                const sessions = data.sessions || data.changed || {};
+                const removed = data.removed || [];
+
+                // Update VPS cache
+                Object.entries(sessions).forEach(([name, stats]) => {
+                    _sseVpsCache[name] = stats;
+                    // Merge into session data for session detail
+                    if(!S.sessionData[name]) S.sessionData[name] = {};
+                    Object.assign(S.sessionData[name], stats);
+                });
+                removed.forEach(n => { delete _sseVpsCache[n]; delete S.sessionData[n]; });
+
+                // Update global banner from any session's data
+                const anyD = Object.values(sessions)[0] || Object.values(_sseVpsCache)[0];
+                if(anyD) updateGlobalBanner(anyD);
+
+                // Update session detail page in real-time
+                if(S.page === 'session' && S.selectedSession) {
+                    const d = _sseVpsCache[S.selectedSession];
+                    if(d) _updateSessionLive(d);
+                }
+
+                // Update overview — but throttle to avoid constant re-renders
+                if(S.page === 'overview') {
+                    const now = Date.now();
+                    if(now - _lastOverviewRender > 2000) { // max 1 render per 2s
+                        _lastOverviewRender = now;
+                        _updateOverviewFromSSE();
+                    }
+                }
+            }
+        } catch(err) { console.error('SSE parse error:', err); }
+    };
+    evtSource.onerror = () => {
+        document.getElementById('status-dot').style.background='var(--yellow)';
+        document.getElementById('status-label').textContent='reconnecting...';
+    };
+}
+
+function _updateSessionLive(d){
+    const u=id=>document.getElementById(id);
+    // BTC price (this is the Binance price — closest real-time proxy)
+    if(u('live-btc')&&d.btc_price) u('live-btc').textContent='$'+Number(d.btc_price).toLocaleString('en-US',{minimumFractionDigits:2});
+    // Price to beat (Chainlink-based settlement reference)
+    if(u('live-ptb')&&d.window_open) u('live-ptb').textContent='$'+Number(d.window_open).toLocaleString('en-US',{minimumFractionDigits:2});
+    // YES book
+    if(u('live-bid')&&d.book_bid) u('live-bid').textContent=(d.book_bid*100).toFixed(1)+'\u00a2';
+    if(u('live-ask')&&d.book_ask) u('live-ask').textContent=(d.book_ask*100).toFixed(1)+'\u00a2';
+    if(u('live-spr')&&d.book_spread!=null) u('live-spr').textContent=(d.book_spread*100).toFixed(1)+'\u00a2';
+    // NO book (derived)
+    if(u('live-nobid')&&d.book_ask) u('live-nobid').textContent=((1-d.book_ask)*100).toFixed(1)+'\u00a2';
+    if(u('live-noask')&&d.book_bid) u('live-noask').textContent=((1-d.book_bid)*100).toFixed(1)+'\u00a2';
+    // Updated ago
+    if(u('live-updated')&&d.updated) u('live-updated').textContent=ago(d.updated);
+    // Window range
+    if(u('live-window')&&d.current_window) u('live-window').textContent=winRange(d.current_window);
+    // Detect window transition — if window_end changed, timer resets smoothly
+    if(d.window_end && S.sessionData[S.selectedSession]) {
+        S.sessionData[S.selectedSession].window_end = d.window_end;
+        S.sessionData[S.selectedSession].current_window = d.current_window;
+    }
+    // Check if trades count changed → full re-render to show new trades
+    const cached = S.sessionData[S.selectedSession];
+    if(cached && d.trades !== undefined) {
+        const oldTrades = cached._lastTradeCount || 0;
+        if(d.trades > oldTrades) {
+            cached._lastTradeCount = d.trades;
+            // New trade detected — reload session with CSV data
+            loadSession(S.selectedSession);
+        }
+    }
+}
+
+function _updateOverviewFromSSE(){
+    // Build session list purely from SSE VPS cache
+    const sessions = Object.entries(_sseVpsCache).map(([name, d]) => ({
+        name, where: d._name ? 'vps' : 'local',
+        status: d.updated && (Date.now()/1000 - d.updated) < 120 ? 'active' : 'stopped',
+        architecture: d.architecture || 'impulse_lag',
+        trades: d.trades || 0, wins: d.wins || 0,
+        wr: d.wr ? Number(d.wr) : 0,
+        pnl_taker: Math.round(d.pnl_taker || 0),
+    }));
+    S.sessions = sessions;
+
+    // Only do a full render if the page structure doesn't exist yet
+    const el = document.getElementById('content');
+    if(!el || !el.querySelector('.sessions-grid') || S.lastRenderedPage !== 'overview') {
+        renderOverview(el);
+        return;
+    }
+
+    // Otherwise, update totals in-place (no DOM rebuild = no flicker)
+    const tot = sessions.reduce((a,s) => a+(s.trades||0), 0);
+    const pnl = sessions.reduce((a,s) => a+(s.pnl_taker||0), 0);
+    const wins = sessions.reduce((a,s) => a+(s.wins||0), 0);
+    const wr = tot > 0 ? (wins/tot*100).toFixed(1) : 0;
+    const act = sessions.filter(s => s.status==='active').length;
+
+    // Update stat boxes by index
+    const statVals = el.querySelectorAll('.stat-value');
+    const statSubs = el.querySelectorAll('.stat-sub');
+    if(statVals.length >= 4) {
+        statVals[0].textContent = fp(pnl); statVals[0].className = 'stat-value ' + pc(pnl);
+        statVals[1].textContent = tot.toLocaleString();
+        statVals[2].textContent = wr + '%'; statVals[2].className = 'stat-value ' + wc(wr);
+        statVals[3].textContent = act;
+    }
+    if(statSubs.length >= 3) {
+        statSubs[0].textContent = fps(tot > 0 ? pnl/tot : 0) + ' / trade';
+        statSubs[1].textContent = sessions.length + ' sessions';
+        statSubs[2].textContent = wins + 'W / ' + (tot-wins) + 'L';
+    }
+
+    // Update session cards — find by name and update PnL/WR/trades
+    sessions.sort((a,b) => (b.pnl_taker||0)-(a.pnl_taker||0));
+    const cards = el.querySelectorAll('.session-card');
+    // If card count doesn't match, do full re-render
+    if(cards.length !== sessions.length) {
+        renderOverview(el);
+        return;
+    }
+    cards.forEach((card, i) => {
+        const s = sessions[i];
+        if(!s) return;
+        const vals = card.querySelectorAll('.sc-stat-value');
+        if(vals.length >= 4) {
+            vals[0].textContent = fp(s.pnl_taker); vals[0].className = 'sc-stat-value ' + pc(s.pnl_taker);
+            vals[1].textContent = s.wr + '%'; vals[1].className = 'sc-stat-value ' + wc(s.wr);
+            vals[2].textContent = s.trades || 0;
+            vals[3].textContent = s.trades > 0 ? fps(s.pnl_taker/s.trades) : '\u2014';
+            vals[3].className = 'sc-stat-value ' + pc(s.pnl_taker);
+        }
     });
 }
 
 // ═══ Init ═══
-loadSessions();
-setInterval(tickTimer, 1000);
-refreshTimer=setInterval(tickRefresh, 1000);
+connectSSE();      // real-time stream from VPS (primary data source)
+// Delayed initial REST load — only if SSE hasn't provided data yet
+setTimeout(() => { if(S.sessions.length === 0) loadSessions(); }, 3000);
+setInterval(tickTimer, 1000);  // local timer tick
+
+// NO REST polling for overview — SSE is the sole data source for live stats.
+// Only poll REST for trade CSV data when explicitly requested (session detail, all trades).
+setInterval(updateRefreshUI, 3000);
 </script>
 </body></html>"""
 
@@ -1317,6 +1814,42 @@ def api_configs():
         except Exception:
             configs.append({"name": f.stem, "desc": "error"})
     return jsonify(configs)
+
+
+@app.route("/api/stream")
+def api_stream():
+    """Server-Sent Events endpoint — real-time push to frontend."""
+    def generate():
+        q = queue.Queue(maxsize=100)
+        _sse_subscribers.append(q)
+        try:
+            # Send initial full state
+            with _vps_cache_lock:
+                initial = dict(_vps_cache)
+            yield "data: {}\n\n".format(json.dumps({
+                "type": "full_state", "sessions": initial,
+                "connected": _vps_connected[0],
+            }))
+            while True:
+                try:
+                    msg = q.get(timeout=15)
+                    yield "data: {}\n\n".format(msg)
+                except queue.Empty:
+                    # Keepalive
+                    yield ": keepalive\n\n"
+        finally:
+            try:
+                _sse_subscribers.remove(q)
+            except ValueError:
+                pass
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.route("/api/ws-status")
+def api_ws_status():
+    """Check if VPS WebSocket relay is connected."""
+    return jsonify({"connected": _vps_connected[0], "cached_sessions": len(_vps_cache)})
 
 
 @app.route("/api/live/<name>")
@@ -1608,9 +2141,9 @@ def get_chart_data():
             cv["pnl"] = round(cv["pnl"])
             cv["avg_pnl"] = round(cv["pnl"] / cv["trades"], 1) if cv["trades"] > 0 else 0
 
-        # Entry price buckets
+        # Entry price buckets (wider range for all architectures)
         entry_buckets = {}
-        for lo, hi in [(20,30),(30,40),(40,50),(50,60),(60,70),(70,80)]:
+        for lo, hi in [(1,10),(10,20),(20,30),(30,40),(40,50),(50,60),(60,70),(70,80),(80,90),(90,99)]:
             label = "{}-{}c".format(lo, hi)
             bucket_trades = [t for t in trades if lo <= float(t.get("fill_price",0) or 0)*100 < hi]
             if len(bucket_trades) >= 2:

@@ -1,0 +1,17 @@
+[Unit]
+Description=Polymarket WebSocket Relay Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/polymarket-bot
+ExecStart=/opt/polymarket-bot/.venv/bin/python -u bot/ws_relay.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/polymarket-bot/ws-relay.log
+StandardError=append:/var/log/polymarket-bot/ws-relay.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,5 @@
+{
+    "_description": "Book fade — trade against PM book imbalance when BTC delta is small",
+    "ARCHITECTURE": "book_fade",
+    "ENABLED_COMBOS": ["BF_2x_fast", "BF_2x_fade", "BF_3x_fade", "BF_3x_snap"]
+}

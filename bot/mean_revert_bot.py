@@ -39,28 +39,32 @@ if _project_root not in sys.path:
 # CONFIG
 # ══════════════════════════════════════════════════════════════
 
-# Position sizing
-BASE_TRADE_DOLLARS = 100
-MAX_SHARES = 500
+# Position sizing — SMALLER to reduce slippage on thin books
+BASE_TRADE_DOLLARS = 50
+MAX_SHARES = 200
 STARTING_BANKROLL = 1000
 
 # Entry filters
-MR_ENTRY_MAX_PRICE = 0.15    # buy tokens below 15c (deeply depressed)
+MR_ENTRY_MAX_PRICE = 0.18    # buy tokens below 18c
 MR_ENTRY_MIN_PRICE = 0.03    # don't buy dust below 3c
-MR_MIN_DROP_CENTS = 10       # token must have dropped at least 10c from recent high
+MR_MIN_DROP_CENTS = 12       # token must have dropped at least 12c from window high
 MR_MIN_BOOK_LEVELS = 1
 MR_MAX_SPREAD = 0.05
 
 # Exit parameters
-MR_TARGET_CENTS = 8          # take profit at +8c from entry
-MR_STOP_LOSS_CENTS = 4       # stop loss at -4c from entry
+MR_TARGET_CENTS = 6          # take profit at +6c (realistic on thin books)
+MR_STOP_LOSS_CENTS = 8       # WIDER stop — don't get shaken out by noise
 MR_MAX_HOLD_SEC = 120        # max hold time before forced exit
 MR_EXIT_BEFORE_SEC = 45      # close all positions 45s before window end
-MR_TRAILING_STOP_CENTS = 3   # trailing stop: if price drops 3c from peak since entry
+MR_TRAILING_STOP_CENTS = 4   # trailing stop once in profit
 
-# Timing
-MR_ENTRY_AFTER_SEC = 15      # don't enter in first 15s of window (let price settle)
-MR_ENTRY_BEFORE_SEC = 120    # don't enter in last 120s (not enough time to recover)
+# Timing — MUCH more conservative entry
+MR_ENTRY_AFTER_SEC = 30      # wait 30s after window open (not 15)
+MR_ENTRY_BEFORE_SEC = 90     # don't enter in last 90s (need time for recovery)
+MR_COOLDOWN_AFTER_LOSS = 30  # wait 30s after a loss
+MR_MAX_ENTRIES_PER_WINDOW = 2 # max 2 entries per window (was unlimited!)
+MR_BOUNCE_CONFIRM_TICKS = 8  # price must be rising for 8 ticks (not 3)
+MR_BOUNCE_MIN_RECOVERY = 3   # must have recovered 3c from the low before entering
 
 # PM fee
 FEE_RATE = 0.072
@@ -392,11 +396,14 @@ async def pm_book_rest_poll():
 # TRADING LOGIC
 # ══════════════════════════════════════════════════════════════
 
+_entries_this_window = [0]
+
 def check_entry(now_s):
-    """Check if we should open a new position."""
+    """Smart mean reversion entry v2 — confirmed bounce required, no knife-catching."""
     if not state.window_active or state.position is not None:
         return
-
+    if _entries_this_window[0] >= MR_MAX_ENTRIES_PER_WINDOW:
+        return
     if not state.book.bids or not state.book.asks:
         return
     if state.book.spread > MR_MAX_SPREAD:
@@ -408,24 +415,103 @@ def check_entry(now_s):
     if time_elapsed < MR_ENTRY_AFTER_SEC or time_remaining < MR_ENTRY_BEFORE_SEC:
         return
 
-    # Check both sides for depressed tokens
+    # Cooldown after a loss
+    if state.completed_trades:
+        last = state.completed_trades[-1]
+        if last.get("result") == "LOSS" and time.time() - last.get("timestamp", 0) < MR_COOLDOWN_AFTER_LOSS:
+            return
+
+    # Need enough price history for bounce detection
+    if len(state.token_price_history) < MR_BOUNCE_CONFIRM_TICKS + 3:
+        return
+
     yes_price = state.book.best_ask
     no_price = 1.0 - state.book.best_bid
 
-    # YES side: buy depressed YES
+    # Check YES side
     if MR_ENTRY_MIN_PRICE <= yes_price <= MR_ENTRY_MAX_PRICE:
-        # Check if it dropped significantly from recent high
         drop = state.token_high - yes_price
         if drop >= MR_MIN_DROP_CENTS / 100:
-            _execute_entry("YES", yes_price)
-            return
+            if _confirm_bounce_yes():
+                _execute_entry("YES", yes_price)
+                _entries_this_window[0] += 1
+                return
 
-    # NO side: buy depressed NO
+    # Check NO side
     if MR_ENTRY_MIN_PRICE <= no_price <= MR_ENTRY_MAX_PRICE:
-        drop = (1.0 - state.token_low) - no_price  # NO price drop
+        drop = (1.0 - state.token_low) - no_price
         if drop >= MR_MIN_DROP_CENTS / 100:
-            _execute_entry("NO", state.book.best_bid)
-            return
+            if _confirm_bounce_no():
+                _execute_entry("NO", state.book.best_bid)
+                _entries_this_window[0] += 1
+                return
+
+
+def _confirm_bounce_yes():
+    """Confirm YES price is genuinely recovering, not just a tick blip."""
+    history = list(state.token_price_history)
+    if len(history) < MR_BOUNCE_CONFIRM_TICKS:
+        return False
+
+    recent = [p for _, p in history[-MR_BOUNCE_CONFIRM_TICKS:]]
+    current = recent[-1]
+
+    # 1. Find the recent low in the last 30 ticks
+    extended = [p for _, p in history[-30:]] if len(history) >= 30 else [p for _, p in history]
+    recent_low = min(extended)
+
+    # 2. Current price must be at least MR_BOUNCE_MIN_RECOVERY cents above the low
+    recovery = (current - recent_low) * 100
+    if recovery < MR_BOUNCE_MIN_RECOVERY:
+        return False
+
+    # 3. Price must be trending UP over the confirmation window (not just one tick)
+    first_half = sum(recent[:len(recent)//2]) / (len(recent)//2)
+    second_half = sum(recent[len(recent)//2:]) / (len(recent) - len(recent)//2)
+    if second_half <= first_half:
+        return False  # second half not higher than first half — not a real bounce
+
+    # 4. BTC must not be accelerating against us
+    if state.binance_price and state.window_open and state.window_open > 0:
+        delta = (state.binance_price - state.window_open) / state.window_open * 10000
+        if delta < -8:  # BTC crashing hard — don't buy YES
+            return False
+
+    return True
+
+
+def _confirm_bounce_no():
+    """Confirm NO price is recovering (YES price is falling from a high)."""
+    history = list(state.token_price_history)
+    if len(history) < MR_BOUNCE_CONFIRM_TICKS:
+        return False
+
+    recent = [p for _, p in history[-MR_BOUNCE_CONFIRM_TICKS:]]
+    current = recent[-1]
+
+    # For NO bounce: YES price should be FALLING (meaning NO is recovering)
+    # Recent high of YES
+    extended = [p for _, p in history[-30:]] if len(history) >= 30 else [p for _, p in history]
+    recent_high = max(extended)
+
+    # YES must have dropped MR_BOUNCE_MIN_RECOVERY from its high
+    drop_from_high = (recent_high - current) * 100
+    if drop_from_high < MR_BOUNCE_MIN_RECOVERY:
+        return False
+
+    # YES must be trending DOWN (meaning NO is recovering)
+    first_half = sum(recent[:len(recent)//2]) / (len(recent)//2)
+    second_half = sum(recent[len(recent)//2:]) / (len(recent) - len(recent)//2)
+    if second_half >= first_half:
+        return False  # YES not falling — NO not recovering
+
+    # BTC not pumping hard
+    if state.binance_price and state.window_open and state.window_open > 0:
+        delta = (state.binance_price - state.window_open) / state.window_open * 10000
+        if delta > 8:
+            return False
+
+    return True
 
 
 def _execute_entry(direction, entry_price):
@@ -743,6 +829,8 @@ async def binance_ws_loop():
                         # Periodic flush
                         if time.time() % 60 < 1:
                             flush_trades()
+                        # Write stats every 3s for real-time dashboard
+                        if time.time() % 3 < 1:
                             write_stats()
 
         except asyncio.CancelledError:
@@ -804,6 +892,7 @@ async def window_manager():
                 state.token_price_history.clear()
                 state.token_high = state.book.best_ask if state.book.best_ask > 0 else 0.5
                 state.token_low = state.book.best_bid if state.book.best_bid > 0 else 0.5
+                _entries_this_window[0] = 0
 
                 ptb_str = "${:,.2f}".format(state.window_open) if state.window_open else "?"
                 t0 = time.localtime(state.window_start)
@@ -820,6 +909,7 @@ async def window_manager():
                     await wait(3 - elapsed)
 
                 state.window_active = True
+                write_stats()  # immediately push new window
                 continue
 
             if time.time() % 30 < 1:

@@ -1,10 +1,15 @@
 {
-    "_description": "Mean reversion aggressive — wider entry, faster target, tighter stops",
-    "MR_ENTRY_MAX_PRICE": 0.20,
-    "MR_ENTRY_MIN_PRICE": 0.02,
-    "MR_MIN_DROP_CENTS": 7,
-    "MR_TARGET_CENTS": 5,
-    "MR_STOP_LOSS_CENTS": 3,
-    "MR_MAX_HOLD_SEC": 90,
-    "MR_TRAILING_STOP_CENTS": 2
+    "_description": "MR v2 aggressive — faster entry, tighter target",
+    "BASE_TRADE_DOLLARS": 40,
+    "MAX_SHARES": 150,
+    "MR_ENTRY_MAX_PRICE": 0.22,
+    "MR_MIN_DROP_CENTS": 8,
+    "MR_TARGET_CENTS": 4,
+    "MR_STOP_LOSS_CENTS": 6,
+    "MR_MAX_HOLD_SEC": 60,
+    "MR_TRAILING_STOP_CENTS": 3,
+    "MR_COOLDOWN_AFTER_LOSS": 20,
+    "MR_MAX_ENTRIES_PER_WINDOW": 3,
+    "MR_BOUNCE_CONFIRM_TICKS": 5,
+    "MR_BOUNCE_MIN_RECOVERY": 2
 }

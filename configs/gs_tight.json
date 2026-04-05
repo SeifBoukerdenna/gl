@@ -1,0 +1,5 @@
+{
+    "_description": "Gamma snipe tight — 3c+ gap in last 30s only",
+    "ARCHITECTURE": "gamma_snipe",
+    "ENABLED_COMBOS": ["GS_2c_10s", "GS_2c_20s", "GS_2c_30s"]
+}

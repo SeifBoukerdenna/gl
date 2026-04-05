@@ -1,0 +1,7 @@
+{
+    "_description": "Book fade LOOSE — 1.5x imbalance, fast confirm",
+    "ARCHITECTURE": "book_fade",
+    "BF_MAX_DELTA_BPS": 15,
+    "BF_MIN_BOOK_SIZE": 20,
+    "ENABLED_COMBOS": ["BF_1.5x_fast", "BF_2x_fast", "BF_2x_fade"]
+}

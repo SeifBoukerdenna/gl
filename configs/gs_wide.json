@@ -1,4 +1,8 @@
 {
-    "_description": "Gamma snipe wide — all combos including 60s window and tight 3c/10s for maximum coverage",
-    "ARCHITECTURE": "gamma_snipe"
+    "_description": "Gamma snipe wide — 5c+ gap, last 30s, higher entry floor to avoid cheap blowups",
+    "ARCHITECTURE": "gamma_snipe",
+    "MIN_ENTRY_PRICE": 0.30,
+    "MAX_ENTRY_PRICE": 0.95,
+    "MAX_SHARES": 200,
+    "ENABLED_COMBOS": ["GS_5c_45s", "GS_5c_60s", "GS_8c_60s"]
 }

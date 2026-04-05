@@ -655,9 +655,28 @@ def analyze_session(csv_path, session_name, output_dir):
     # Return session summary for cross-session comparison
     total_pnl = s["pnl_taker"].sum()
     total_wins = s.filter(pl.col("result") == "WIN").height
+
+    # Detect architecture
+    arch = "impulse_lag"
+    if "architecture" in s.columns:
+        arch_vals = s["architecture"].unique().to_list()
+        if arch_vals:
+            arch = arch_vals[0]
+    if arch == "impulse_lag":
+        cfg_path = Path("configs") / "{}.json".format(session_name)
+        if cfg_path.exists():
+            try:
+                import json as _json
+                cfg = _json.loads(cfg_path.read_text())
+                arch = cfg.get("ARCHITECTURE", arch)
+            except Exception:
+                pass
+
     return {
         "name": session_name,
+        "architecture": arch,
         "n_trades": n_trades,
+        "wins": total_wins,
         "n_windows": n_windows,
         "hours": hours,
         "pnl": total_pnl,
@@ -687,16 +706,17 @@ def cross_session_comparison(session_summaries):
 
     # ── Leaderboard ──────────────────────────────────────────
     print("\n{}{}  LEADERBOARD  {}".format(BOLD, W, RST))
-    print("  {}{:>2} {:>22} {:>6} {:>6} {:>10} {:>8} {:>6}{}".format(
-        DIM, "#", "Session", "Trades", "Win%", "PnL", "$/trade", "Hours", RST
+    print("  {}{:>2} {:>22} {:>18} {:>6} {:>6} {:>10} {:>8} {:>6}{}".format(
+        DIM, "#", "Session", "Architecture", "Trades", "Win%", "PnL", "$/trade", "Hours", RST
     ))
-    print("  {}{}{}".format(DIM, "-" * 70, RST))
+    print("  {}{}{}".format(DIM, "-" * 90, RST))
 
     for i, ss in enumerate(ranked):
         rank_color = G if i == 0 else Y if i <= 2 else ""
-        print("  {}{:>2}{} {:>22} {:>6} {} {:>10} {:>8} {:>5.1f}h".format(
+        print("  {}{:>2}{} {:>22} {:>18} {:>6} {} {:>10} {:>8} {:>5.1f}h".format(
             rank_color, i + 1, RST,
-            ss["name"], ss["n_trades"], cwr(ss["wr"]),
+            ss["name"], ss.get("architecture", "impulse_lag"),
+            ss["n_trades"], cwr(ss["wr"]),
             cpnl(ss["pnl"]), cpnl(ss["avg_pnl"], "+.1f"), ss["hours"],
         ))
 
@@ -866,6 +886,62 @@ def cross_session_comparison(session_summaries):
     fig5.savefig(output_dir / "time_aligned_pnl.png", dpi=150)
     plt.close(fig5)
     print("  Saved {}".format(output_dir / "time_aligned_pnl.png"))
+
+    # ── Architecture Aggregation ───────────────────────────────
+    import math
+    print("\n{}{}  ARCHITECTURE PERFORMANCE  {}".format(BOLD, W, RST))
+    arch_data = {}
+    for ss in ranked:
+        arch = ss.get("architecture", "impulse_lag")
+        if arch not in arch_data:
+            arch_data[arch] = {"trades": 0, "wins": 0, "pnl": 0.0, "pnl_list": []}
+        arch_data[arch]["trades"] += ss["n_trades"]
+        arch_data[arch]["wins"] += ss["wins"]
+        arch_data[arch]["pnl"] += ss["pnl"]
+        arch_data[arch]["pnl_list"].extend(ss["df"]["pnl_taker"].to_list())
+
+    arch_rows = []
+    for arch, v in arch_data.items():
+        n = v["trades"]
+        wr = v["wins"] / n * 100 if n > 0 else 0
+        avg = v["pnl"] / n if n > 0 else 0
+        pnls = v["pnl_list"]
+        sharpe = sortino = 0.0
+        max_dd = 0
+        if len(pnls) >= 2:
+            mean = sum(pnls) / len(pnls)
+            var = sum((p - mean) ** 2 for p in pnls) / (len(pnls) - 1)
+            std = math.sqrt(var) if var > 0 else 0.001
+            sharpe = mean / std
+            ds = [p for p in pnls if p < 0]
+            if ds:
+                dd_std = math.sqrt(sum(p ** 2 for p in ds) / len(ds))
+                sortino = mean / dd_std if dd_std > 0 else 0
+            else:
+                sortino = 99.99 if mean > 0 else 0
+            cum = 0
+            peak = 0
+            for p in pnls:
+                cum += p
+                if cum > peak:
+                    peak = cum
+                dd = peak - cum
+                if dd > max_dd:
+                    max_dd = dd
+        arch_rows.append((arch, n, wr, v["pnl"], avg, sharpe, sortino, max_dd))
+
+    arch_rows.sort(key=lambda x: -x[5])  # sort by Sharpe
+    print("  {}{:<20} {:>6} {:>6} {:>10} {:>8} {:>7} {:>8} {:>7}{}".format(
+        DIM, "Architecture", "Trades", "Win%", "PnL", "$/trade", "Sharpe", "Sortino", "MaxDD", RST
+    ))
+    print("  {}{}{}".format(DIM, "-" * 82, RST))
+    for arch, n, wr, pnl, avg, sharpe, sortino, max_dd in arch_rows:
+        sort_str = "INF" if sortino >= 99 else "{:.2f}".format(sortino)
+        sc = G if sharpe >= 0.5 else Y if sharpe >= 0 else R
+        print("  {:<20} {:>6} {} {:>10} {:>8} {}{:>7.2f}{} {:>8} {:>7}".format(
+            arch, n, cwr(wr), cpnl(pnl), cpnl(avg, "+.1f"),
+            sc, sharpe, RST, sort_str, cpnl(-max_dd),
+        ))
 
     print("\n{}{}{}".format(M, "=" * 70, RST))
     print("  {}WINNER: {}{}{}  |  {} trades  |  {}  |  {} avg".format(

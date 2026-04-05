@@ -1,0 +1,5 @@
+{
+    "_description": "Overreaction fade strict — $50+ moves only, volume filtered",
+    "ARCHITECTURE": "overreaction_fade",
+    "ENABLED_COMBOS": ["OF_50usd_60s", "OF_30usd_60s_vol", "OF_30usd_60s_3x"]
+}

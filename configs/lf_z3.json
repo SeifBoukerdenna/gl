@@ -1,0 +1,5 @@
+{
+    "_description": "Lottery fade z>3 only — near-certain outcomes, fade the lottery ticket",
+    "ARCHITECTURE": "lottery_fade",
+    "ENABLED_COMBOS": ["LF_z3_120s", "LF_z2.5_120s"]
+}

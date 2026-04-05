@@ -113,10 +113,13 @@ def check_signals(state, now_s):
             continue
 
         # F2: Entry price filter (YES price range — configs specify YES price bounds)
-        if entry_price < engine.MIN_ENTRY_PRICE or entry_price > engine.MAX_ENTRY_PRICE:
+        import bot.paper_trade_v2 as _eng
+        _min = _eng.MIN_ENTRY_PRICE
+        _max = _eng.MAX_ENTRY_PRICE
+        if entry_price < _min or entry_price > _max:
             engine.log_skip(combo.name, direction, entry_price, impulse_bps, time_remaining,
-                            "YES price {:.0f}c outside {:.0f}-{:.0f}c".format(
-                                entry_price * 100, engine.MIN_ENTRY_PRICE * 100, engine.MAX_ENTRY_PRICE * 100))
+                            "YES {:.0f}c outside {:.0f}-{:.0f}c".format(
+                                entry_price * 100, _min * 100, _max * 100))
             continue
 
         # F3: Dead zone

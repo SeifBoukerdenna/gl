@@ -1,0 +1,15 @@
+{
+    "_description": "MR v2 patient — big drops only, long hold, no stop loss",
+    "BASE_TRADE_DOLLARS": 60,
+    "MAX_SHARES": 250,
+    "MR_ENTRY_MAX_PRICE": 0.15,
+    "MR_MIN_DROP_CENTS": 18,
+    "MR_TARGET_CENTS": 10,
+    "MR_STOP_LOSS_CENTS": 20,
+    "MR_MAX_HOLD_SEC": 180,
+    "MR_TRAILING_STOP_CENTS": 5,
+    "MR_COOLDOWN_AFTER_LOSS": 45,
+    "MR_MAX_ENTRIES_PER_WINDOW": 1,
+    "MR_BOUNCE_CONFIRM_TICKS": 10,
+    "MR_BOUNCE_MIN_RECOVERY": 5
+}

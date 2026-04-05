@@ -1,0 +1,5 @@
+{
+    "_description": "Settlement drift LOOSE — all combos, cross + carry",
+    "ARCHITECTURE": "settlement_drift",
+    "ENABLED_COMBOS": ["SD_cross_45s", "SD_cross_60s", "SD_cross_60s_lax", "SD_carry_3bp"]
+}

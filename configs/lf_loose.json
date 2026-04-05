@@ -1,0 +1,6 @@
+{
+    "_description": "Lottery fade LOOSE — z>1.5, any time in last 120s",
+    "ARCHITECTURE": "lottery_fade",
+    "LF_MIN_LOSING_OVERPRICE": 0.01,
+    "ENABLED_COMBOS": ["LF_z2_120s", "LF_z2_90s", "LF_z2_60s"]
+}

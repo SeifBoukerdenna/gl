@@ -1,0 +1,8 @@
+{
+    "_description": "Gamma snipe LOOSE — 3c gap, last 30s, entry floor 30c",
+    "ARCHITECTURE": "gamma_snipe",
+    "MIN_ENTRY_PRICE": 0.30,
+    "MAX_ENTRY_PRICE": 0.95,
+    "MAX_SHARES": 200,
+    "ENABLED_COMBOS": ["GS_2c_10s", "GS_2c_20s", "GS_3c_45s"]
+}
