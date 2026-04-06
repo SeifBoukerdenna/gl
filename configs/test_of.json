@@ -1,1 +1,1 @@
-{"_description": "overreaction_fade all 5 combos", "ARCHITECTURE": "overreaction_fade"}
+{"_description": "overreaction_fade AGGRESSIVE — includes $10-15 moves with 1.2-1.5x overreaction", "ARCHITECTURE": "overreaction_fade", "ENABLED_COMBOS": ["OF_15usd_60s", "OF_10usd_60s", "OF_15usd_45s_1.2x", "OF_30usd_60s"]}

@@ -15,6 +15,10 @@ COMBO_PARAMS = [
     {"name": "OF_30usd_45s",     "btc_threshold_bp": 0, "lookback_s": 0, "min_move_usd": 30, "max_time_since_open": 45, "min_overreaction": 2.0, "vol_filter": False},
     {"name": "OF_30usd_60s_3x",  "btc_threshold_bp": 0, "lookback_s": 0, "min_move_usd": 30, "max_time_since_open": 60, "min_overreaction": 3.0, "vol_filter": False},
     {"name": "OF_30usd_60s_vol", "btc_threshold_bp": 0, "lookback_s": 0, "min_move_usd": 30, "max_time_since_open": 60, "min_overreaction": 2.0, "vol_filter": True},
+    # Aggressive combos — lower thresholds to actually trade
+    {"name": "OF_15usd_60s",     "btc_threshold_bp": 0, "lookback_s": 0, "min_move_usd": 15, "max_time_since_open": 60, "min_overreaction": 1.3, "vol_filter": False},
+    {"name": "OF_10usd_60s",     "btc_threshold_bp": 0, "lookback_s": 0, "min_move_usd": 10, "max_time_since_open": 60, "min_overreaction": 1.5, "vol_filter": False},
+    {"name": "OF_15usd_45s_1.2x","btc_threshold_bp": 0, "lookback_s": 0, "min_move_usd": 15, "max_time_since_open": 45, "min_overreaction": 1.2, "vol_filter": False},
 ]
 
 _combo_config = {p["name"]: p for p in COMBO_PARAMS}

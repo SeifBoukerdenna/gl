@@ -1,1 +1,1 @@
-{"_description": "gamma_snipe all 8 combos, 30c floor, 200 max shares", "ARCHITECTURE": "gamma_snipe", "MIN_ENTRY_PRICE": 0.30, "MAX_ENTRY_PRICE": 0.95, "MAX_SHARES": 200}
+{"_description": "Gamma snipe TIGHT — last 45s only, entry 60c+, avoids the T-60s coin-flip zone", "ARCHITECTURE": "gamma_snipe", "MIN_ENTRY_PRICE": 0.60, "MAX_ENTRY_PRICE": 0.95, "MAX_SHARES": 200, "ENABLED_COMBOS": ["GS_3c_45s", "GS_5c_45s", "GS_2c_30s", "GS_2c_20s", "GS_2c_10s"]}

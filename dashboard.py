@@ -615,8 +615,8 @@ a{color:var(--blue);text-decoration:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeIn{from{opacity:.7}to{opacity:1}}
 .fade-in{animation:fadeIn .2s ease}
-@keyframes deltaFade{0%{opacity:1;transform:translateY(0)}90%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-6px)}}
-.ov-delta{display:inline-block;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-left:6px;animation:deltaFade 30s ease-out forwards}
+@keyframes deltaFade{0%{opacity:1;transform:translateY(0)}92%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-6px)}}
+.ov-delta{display:inline-block;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-left:6px;animation:deltaFade 240s ease-out forwards}
 
 /* Stat boxes */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px}
@@ -890,13 +890,27 @@ function updateOverview() {
 // ═══ Overview ═══
 S._ovSort='pnl'; S._ovArchSet=new Set(); S._ovDir='desc'; S._ovChartData=null; S._ovChartDirty=true; S._ovTimeAxis=false;
 S._ovPrev={pnl:null,trades:null,wr:null};
-function ovDeltaBadge(cur,prev,fmt){
+S._ovDeltaCache={};  // {key: {color, text, ts}}
+S._ovDeltaPrev={};   // {key: lastValue} — auto-tracks previous values per key
+function ovDeltaBadge(key,cur,prev,fmt){
+    const now=Date.now();
+    // If we have a cached delta still within display window, show it
+    const cached=S._ovDeltaCache[key];
+    if(cached && now-cached.ts < 240000) {
+        const remaining=Math.max(0.1,240-(now-cached.ts)/1000);
+        return '<span class="ov-delta" style="color:'+cached.color+';animation-duration:'+remaining.toFixed(1)+'s">'+cached.text+'</span>';
+    }
+    // Use auto-tracked prev if explicit prev is null
+    if(prev===null) prev=S._ovDeltaPrev[key]!=null?S._ovDeltaPrev[key]:null;
+    S._ovDeltaPrev[key]=cur;
+    // New delta
     if(prev===null||prev===cur) return '';
     const d=cur-prev;
     if(Math.abs(d)<0.01) return '';
-    const c=d>0?'var(--green)':'var(--red)';
-    const s=d>0?'+':'';
-    return '<span class="ov-delta" style="color:'+c+'">'+s+fmt(d)+'</span>';
+    const color=d>0?'var(--green)':'var(--red)';
+    const text=(d>0?'+':'')+fmt(d);
+    S._ovDeltaCache[key]={color,text,ts:now};
+    return '<span class="ov-delta" style="color:'+color+'">'+text+'</span>';
 }
 function _ovSortSessions(ss){
     const key=S._ovSort, dir=S._ovDir==='desc'?-1:1;
@@ -1124,9 +1138,11 @@ function renderOverview(el) {
     Object.entries(archStats).sort((a,b)=>b[1].pnl-a[1].pnl).forEach(([a,v])=>{
         const active=S._ovArchSet.has(a);
         const awr=v.trades>0?(v.wins/v.trades*100).toFixed(0):'0';
+        const apnlD=ovDeltaBadge('arch_pnl_'+a,Math.round(v.pnl),null,d=>'$'+d.toLocaleString());
+        const atrdD=ovDeltaBadge('arch_trd_'+a,v.trades,null,d=>d.toString());
         archPills+=`<button class="btn btn-sm${active?' btn-blue':''}" style="font-size:10px;padding:3px 10px" onclick="ovToggleArch('${a}')">
-            ${a.replace(/_/g,' ')} <span class="${pc(v.pnl)}" style="font-weight:700">${fp(v.pnl)}</span>
-            <span class="d">${v.trades}t ${awr}%</span></button>`;
+            ${a.replace(/_/g,' ')} <span class="${pc(v.pnl)}" style="font-weight:700">${fp(v.pnl)}</span>${apnlD}
+            <span class="d">${v.trades}t ${awr}%</span>${atrdD}</button>`;
     });
 
     // Sort indicator
@@ -1206,9 +1222,9 @@ function renderOverview(el) {
     // Compute deltas from previous values
     const pnlNum=Math.round(pnl);
     const wrNum=parseFloat(wr);
-    const dpnl=ovDeltaBadge(pnlNum,S._ovPrev.pnl,d=>'$'+d.toLocaleString());
-    const dtrades=ovDeltaBadge(tot,S._ovPrev.trades,d=>d.toString());
-    const dwr=ovDeltaBadge(wrNum,S._ovPrev.wr,d=>d.toFixed(1)+'pp');
+    const dpnl=ovDeltaBadge('pnl',pnlNum,S._ovPrev.pnl,d=>'$'+d.toLocaleString());
+    const dtrades=ovDeltaBadge('trades',tot,S._ovPrev.trades,d=>d.toString());
+    const dwr=ovDeltaBadge('wr',wrNum,S._ovPrev.wr,d=>d.toFixed(1)+'pp');
     S._ovPrev={pnl:pnlNum,trades:tot,wr:wrNum};
 
     // Update dynamic zone (stats + filters) — no chart destruction
@@ -2113,9 +2129,6 @@ function _updateOverviewFromSSE(){
         renderOverview(el);
         return;
     }
-    // Check if data actually changed before re-rendering
-    const newJSON = JSON.stringify(sessions);
-    if(newJSON === S.lastDataJSON) return;
     renderOverview(el);
     return;
 

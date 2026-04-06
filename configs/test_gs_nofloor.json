@@ -1,1 +1,1 @@
-{"_description": "A/B: gamma_snipe all 8 combos, NO entry floor (10-97c), 200sh", "ARCHITECTURE": "gamma_snipe", "MAX_SHARES": 200}
+{"_description": "Gamma snipe A/B — last 45s, wider entry 30c+ for comparison", "ARCHITECTURE": "gamma_snipe", "MIN_ENTRY_PRICE": 0.30, "MAX_ENTRY_PRICE": 0.95, "MAX_SHARES": 200, "ENABLED_COMBOS": ["GS_3c_45s", "GS_5c_45s", "GS_2c_30s", "GS_2c_20s", "GS_2c_10s"]}
