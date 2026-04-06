@@ -253,6 +253,8 @@ class State:
         self.cooldown_until = 0
         self.window_price_high = None
         self.window_price_low = None
+        self.window_crossed_above = False  # BTC went above strike this window
+        self.window_crossed_below = False  # BTC went below strike this window
         self.consecutive_all_loss_windows = 0
         # Skip tracking
         self.pending_skips = []
@@ -354,12 +356,25 @@ async def binance_ws_loop():
                     state.binance_price = price
                     state.binance_ts = ts_ms
 
+                    # Raw tick hook — fires on EVERY Binance message (for volume counting)
+                    if _ARCH_SPEC and _ARCH_SPEC.get("on_raw_tick"):
+                        _ARCH_SPEC["on_raw_tick"](state, price, ts_ms)
+
                     # Track window high/low for cooldown
                     if state.window_active:
                         if state.window_price_high is None or price > state.window_price_high:
                             state.window_price_high = price
                         if state.window_price_low is None or price < state.window_price_low:
                             state.window_price_low = price
+                        # Track if BTC crossed above/below strike (for chop detection)
+                        # Only count crosses that are >3bp from strike (ignore noise around strike)
+                        if state.window_open and state.offset and state.window_open > 0:
+                            corrected = price - state.offset
+                            cross_margin = state.window_open * 0.0003  # 3bp
+                            if corrected >= state.window_open + cross_margin:
+                                state.window_crossed_above = True
+                            if corrected <= state.window_open - cross_margin:
+                                state.window_crossed_below = True
 
                     current_s = ts_ms // 1000
                     # Record price buffer once per second (for lookback calculations)
@@ -585,6 +600,14 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
     if book_age_ms > MAX_BOOK_AGE_MS:
         return
 
+    # Chop filter — if BTC crossed the strike both ways (by 3bp+) AND we're past
+    # the first 2 minutes, the window is choppy. Skip directional bets.
+    # Early crosses are OK — BTC might still trend after initial noise.
+    if state.window_crossed_above and state.window_crossed_below:
+        elapsed = time.time() - state.window_start if state.window_start else 0
+        if elapsed > 120:  # only block after 2 minutes into window
+            return
+
     # One trade per architecture per window — prevents self-competition on the same book
     if ONE_TRADE_PER_WINDOW and state.window_start:
         for c in state.combos:
@@ -733,6 +756,12 @@ def settle_window(window_start, outcome, final_price=None, silent=False):
         pos["result"] = "WIN" if won else "LOSS"
 
         combo.trades.append(pos)
+        # Cap trades list to prevent memory leak — keep last 50, move rest to counters
+        if len(combo.trades) > 50:
+            old = combo.trades.pop(0)
+            combo.restored_trade_count += 1
+            if old.get("result") == "WIN":
+                combo.restored_win_count += 1
         combo.total_pnl_taker += pnl_tk
         combo.total_pnl_maker += pnl_mk
         if not combo.tracking_only:
@@ -1067,6 +1096,8 @@ async def window_manager():
                 # Reset window tracking
                 state.window_price_high = None
                 state.window_price_low = None
+                state.window_crossed_above = False
+                state.window_crossed_below = False
                 state.skip_prints_this_window = 0
 
                 # Setup next window IMMEDIATELY — don't wait for settlement API

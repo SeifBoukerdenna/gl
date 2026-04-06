@@ -1,0 +1,1 @@
+{"_description": "Consensus LOOSE — trade when 2+ of 4 agree", "ARCHITECTURE": "consensus", "ENABLED_COMBOS": ["CON_2of4", "CON_3of4"]}
