@@ -1,0 +1,5 @@
+{
+    "_description": "Delta sniper strong — high conviction combos only, min 70% fair prob",
+    "ARCHITECTURE": "delta_sniper",
+    "ENABLED_COMBOS": ["DS_3c_strong", "DS_5c_strong"]
+}

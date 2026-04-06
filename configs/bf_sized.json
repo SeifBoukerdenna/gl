@@ -1,0 +1,6 @@
+{
+    "_description": "Book fade sized up — BF_1.5x_fast + BF_2x_fast at $150/trade, testing larger size on proven edge",
+    "ARCHITECTURE": "book_fade",
+    "BASE_TRADE_DOLLARS": 150,
+    "ENABLED_COMBOS": ["BF_1.5x_fast", "BF_2x_fast"]
+}

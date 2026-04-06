@@ -43,6 +43,9 @@ DOWN_MIN_ENTRY = 0.25     # slight floor for DOWN
 MAX_IMPULSE_BP = 25       # 30+bp: 0% win -$4,672. 20-30bp: 77% win, keep it
 MAX_SPREAD = 0.03
 MAX_SLIPPAGE = 0.05         # reject fills > 5c worse than best price
+MAX_BOOK_AGE_MS = 500       # reject signals when book data is older than 500ms
+ONE_TRADE_PER_WINDOW = True # only one trade per architecture per window (prevents self-competition)
+STALE_BOOK_SIZING = False   # dynamic sizing: scale up when PM book is stale (more lag = more edge)
 MIN_BOOK_LEVELS = 3
 
 # Time filters (from 1,274-trade paper data)
@@ -198,6 +201,12 @@ class Combo:
     total_pnl_maker: float = 0
     bankroll: float = STARTING_BANKROLL
     tracking_only: bool = False
+    restored_trade_count: int = 0  # trades restored from CSV (not in trades list)
+    restored_win_count: int = 0
+
+    @property
+    def total_trades(self):
+        return len(self.trades) + self.restored_trade_count
 
     def compute_position_size(self, entry_price):
         """Flat dollar sizing with hard caps. No Kelly."""
@@ -310,21 +319,8 @@ def walk_book(levels, size):
 
 
 def log_skip(combo_name, direction, entry_price, impulse_bps, time_remaining, reason):
-    """Record a filtered signal for later analysis."""
-    skip = {
-        "timestamp": time.time(),
-        "window_start": state.window_start,
-        "combo": combo_name,
-        "direction": direction,
-        "entry_price": round(entry_price, 4) if entry_price else 0,
-        "impulse_bps": round(impulse_bps, 2),
-        "time_remaining": round(time_remaining, 1),
-        "reason": reason,
-        "outcome": None,
-        "would_have_won": None,
-    }
-    state.pending_skips.append(skip)
-
+    """Record a filtered signal — skip CSV logging to prevent disk/memory bloat."""
+    # Only print first few skips per window, don't buffer to CSV
     if state.skip_prints_this_window < MAX_SKIP_PRINTS:
         print("  {}[skip] {} {} @{:.0f}c | {}{}".format(
             DIM, combo_name, direction, (entry_price or 0) * 100, reason, RST))
@@ -366,13 +362,18 @@ async def binance_ws_loop():
                             state.window_price_low = price
 
                     current_s = ts_ms // 1000
+                    # Record price buffer once per second (for lookback calculations)
                     if current_s != state.last_recorded_second:
                         state.price_buffer.append((current_s, price))
                         state.last_recorded_second = current_s
-                        # Architecture dispatch
+                        # on_tick hooks only need once per second (vol tracking etc)
+                        if _ARCH_SPEC and _ARCH_SPEC.get("on_tick"):
+                            _ARCH_SPEC["on_tick"](state, price, current_s)
+
+                    # Signal check every 200ms (5x/sec) — balances speed vs memory
+                    if ts_ms - getattr(state, '_last_signal_check_ms', 0) >= 200:
+                        state._last_signal_check_ms = ts_ms
                         if _ARCH_SPEC:
-                            if _ARCH_SPEC.get("on_tick"):
-                                _ARCH_SPEC["on_tick"](state, price, current_s)
                             _ARCH_SPEC["check_signals"](state, current_s)
                         else:
                             check_signals_sync(current_s)
@@ -579,9 +580,34 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
     if not book.bids and not book.asks:
         return
 
+    # Book freshness gate — reject stale book data
+    book_age_ms = (time.time() - book.updated_at) * 1000
+    if book_age_ms > MAX_BOOK_AGE_MS:
+        return
+
+    # One trade per architecture per window — prevents self-competition on the same book
+    if ONE_TRADE_PER_WINDOW and state.window_start:
+        for c in state.combos:
+            if c is not combo and c.has_position_in_window(state.window_start):
+                return
+
     trade_size = combo.compute_position_size(entry_price)
     if trade_size <= 0:
         return
+
+    # Stale Book Sizing: scale position based on how stale PM's book is
+    # Stale book = PM hasn't repriced yet = more lag edge = size up
+    # Fresh book = PM already repriced = less edge = size down
+    if STALE_BOOK_SIZING:
+        if book_age_ms >= 300:
+            trade_size = int(trade_size * 2.0)  # stale: double down
+        elif book_age_ms >= 150:
+            trade_size = int(trade_size * 1.5)  # moderate: 1.5x
+        elif book_age_ms < 80:
+            trade_size = int(trade_size * 0.5)  # fresh: half size
+        trade_size = min(trade_size, MAX_SHARES)
+        if trade_size <= 0:
+            return
 
     if direction == "YES":
         result = walk_book(book.asks, trade_size)
@@ -744,8 +770,8 @@ def settle_window(window_start, outcome, final_price=None, silent=False):
 
     print("\n  {}{}  RESULT: {}  {}{}\n".format(oc, BOLD, outcome.upper(), RST, "-" * 50))
     for c in state.combos:
-        n = len(c.trades)
-        wins = sum(1 for t in c.trades if t.get("result") == "WIN")
+        n = c.total_trades
+        wins = sum(1 for t in c.trades if t.get("result") == "WIN") + c.restored_win_count
         wr = wins / n * 100 if n > 0 else 0
         last = c.trades[-1] if c.trades else None
         here = last and last["window_start"] == window_start
@@ -783,7 +809,7 @@ def print_rolling_summary():
         if not c.trades:
             print("  {}{:>12}  -- no trades --{}".format(DIM, c.name, RST))
             continue
-        n = len(c.trades)
+        n = c.total_trades
         wins = sum(1 for t in c.trades if t["result"] == "WIN")
         wr = wins / n * 100
         avg_slip = sum(abs(t["slippage"]) for t in c.trades) / n * 100
@@ -844,8 +870,8 @@ def write_session_stats():
 
     combos = {}
     for c in state.combos:
-        n = len(c.trades)
-        wins = sum(1 for t in c.trades if t.get("result") == "WIN")
+        n = c.total_trades
+        wins = sum(1 for t in c.trades if t.get("result") == "WIN") + c.restored_win_count
         combos[c.name] = {
             "trades": n, "wins": wins,
             "wr": round(wins / n * 100, 1) if n > 0 else 0,
@@ -1361,7 +1387,7 @@ async def run():
         print("\n\nShutting down...")
         await resolve_all_pending()
         flush_csvs()
-        n_trades = sum(len(c.trades) for c in state.combos)
+        n_trades = sum(c.total_trades for c in state.combos)
         n_skips = len(state.skip_buffer) + len(state.pending_skips)
         print("Saved {} trades to {}".format(n_trades, TRADE_CSV))
         print("Saved {} skips to {}".format(n_skips, SKIP_CSV))
@@ -1406,6 +1432,63 @@ def main():
     if ENABLED_COMBOS:
         state.combos = [c for c in state.combos if c.name in ENABLED_COMBOS]
     state.architecture = ARCHITECTURE
+
+    # Restore trade history from CSV so stats.json survives restarts
+    csv_path = Path("data") / args.instance / "trades.csv"
+    if csv_path.exists():
+        try:
+            import csv as _csv
+            combo_map = {c.name: c for c in state.combos}
+            restored = 0
+            with open(csv_path) as f:
+                for row in _csv.DictReader(f):
+                    result = (row.get("result") or "").strip()
+                    if result not in ("WIN", "LOSS"):
+                        continue
+                    combo_name = (row.get("combo") or "").strip()
+                    combo = combo_map.get(combo_name)
+                    if not combo:
+                        continue
+                    trade = {k: row.get(k) for k in row}
+                    # Convert numeric fields
+                    for k in ("pnl_taker", "pnl_maker", "fill_price", "filled_size",
+                              "fee", "slippage", "total_cost", "total_fee", "total_slippage",
+                              "notional", "timestamp", "time_remaining", "impulse_bps",
+                              "best_bid", "best_ask", "mid", "spread", "btc_price", "delta_bps"):
+                        if k in trade and trade[k]:
+                            try:
+                                trade[k] = float(trade[k])
+                            except (ValueError, TypeError):
+                                pass
+                    combo.trades.append(trade)
+                    pnl = float(row.get("pnl_taker", 0) or 0)
+                    combo.total_pnl_taker += pnl
+                    combo.total_pnl_maker += float(row.get("pnl_maker", 0) or 0)
+                    combo.bankroll += pnl
+                    restored += 1
+            # Restore completed_windows from unique window_start values
+            seen_windows = {}
+            with open(csv_path) as f2:
+                for row in _csv.DictReader(f2):
+                    ws = row.get("window_start")
+                    result = (row.get("result") or "").strip()
+                    if ws and result in ("WIN", "LOSS"):
+                        outcome = row.get("outcome") or ("Up" if result == "WIN" else "Down")
+                        seen_windows[ws] = outcome
+            for ws, outcome in sorted(seen_windows.items()):
+                state.completed_windows.append({"window_start": float(ws), "outcome": outcome})
+            # Cap completed_windows to prevent memory bloat (keep last 500)
+            if len(state.completed_windows) > 500:
+                state.completed_windows = state.completed_windows[-500:]
+            # Move restored trade count to counter and free the objects from memory
+            for c in state.combos:
+                c.restored_trade_count = len(c.trades)
+                c.restored_win_count = sum(1 for t in c.trades if t.get("result") == "WIN")
+                c.trades = []
+            if restored:
+                print("Restored {} trades, {} windows from CSV".format(restored, len(seen_windows)))
+        except Exception as e:
+            print("CSV restore failed: {}".format(e))
 
     def handle_sig(sig, frame):
         state.running = False

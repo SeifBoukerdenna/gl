@@ -1,0 +1,7 @@
+{
+    "_description": "Certainty premium z>2 MICRO — higher conviction z>2 only, $25/trade, 40 shares max",
+    "ARCHITECTURE": "certainty_premium",
+    "BASE_TRADE_DOLLARS": 25,
+    "MAX_SHARES": 40,
+    "ENABLED_COMBOS": ["CP_z2_60s_95c", "CP_z2_30s_93c"]
+}

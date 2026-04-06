@@ -91,6 +91,10 @@ def check_signals(state, now_s):
     """Delta sniper signal detection — compare delta table fair value vs PM book price."""
     import bot.paper_trade_v2 as engine
 
+    # Read configurable params from engine (allows config JSON overrides)
+    _ds_min_entry = getattr(engine, 'DS_MIN_ENTRY_PRICE', DS_MIN_ENTRY_PRICE)
+    _ds_max_entry = getattr(engine, 'DS_MAX_ENTRY_PRICE', DS_MAX_ENTRY_PRICE)
+
     if not _table_loaded:
         _load_delta_table()
     if not _delta_table:
@@ -145,8 +149,7 @@ def check_signals(state, now_s):
         gap_yes = fair_prob - yes_cost
 
         if gap_yes >= min_gap and fair_prob >= min_fair:
-            # Actual cost filter
-            if DS_MIN_ENTRY_PRICE <= yes_cost <= DS_MAX_ENTRY_PRICE:
+            if _ds_min_entry <= yes_cost <= _ds_max_entry:
                 engine.execute_paper_trade(combo, "YES", gap_yes * 100, time_remaining, yes_cost)
                 continue
 
@@ -156,7 +159,7 @@ def check_signals(state, now_s):
         gap_no = no_fair - no_cost
 
         if gap_no >= min_gap and no_fair >= min_fair:
-            if DS_MIN_ENTRY_PRICE <= no_cost <= DS_MAX_ENTRY_PRICE:
+            if _ds_min_entry <= no_cost <= _ds_max_entry:
                 engine.execute_paper_trade(combo, "NO", gap_no * 100, time_remaining, state.book.best_bid)
 
 

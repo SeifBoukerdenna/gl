@@ -1,0 +1,1 @@
+{"_description": "A/B: micro_scalp all 4 combos, loose thresholds (0.5bp delta, 1.2x imb, 1c gap)", "ARCHITECTURE": "micro_scalp", "MS_MIN_DELTA_BPS": 0.5, "MS_MIN_IMBALANCE": 1.2, "MS_MIN_FAIR_GAP": 0.01}

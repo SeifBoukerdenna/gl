@@ -1,0 +1,5 @@
+{
+    "_description": "Delta sniper balanced — 2c/3c/5c gaps, NO extreme (DS_2c_extreme was -$465 at 74% WR, R:R 0.18)",
+    "ARCHITECTURE": "delta_sniper",
+    "ENABLED_COMBOS": ["DS_2c_gap", "DS_3c_gap", "DS_5c_gap"]
+}

@@ -1,0 +1,5 @@
+{
+    "_description": "Micro scalp delta + impulse_imb — both positive combos, no MS_2sig",
+    "ARCHITECTURE": "micro_scalp",
+    "ENABLED_COMBOS": ["MS_delta", "MS_impulse_imb"]
+}

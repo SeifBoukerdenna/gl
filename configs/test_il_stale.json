@@ -1,0 +1,1 @@
+{"_description": "A/B: impulse_lag with STALE BOOK SIZING — scales up 2x when PM book is stale, 0.5x when fresh", "STALE_BOOK_SIZING": true, "MIN_ENTRY_PRICE": 0.10, "MAX_ENTRY_PRICE": 0.90, "MAX_IMPULSE_BP": 50, "DEAD_ZONE_START": 90, "DEAD_ZONE_END": 210}

@@ -1,0 +1,9 @@
+{
+    "_description": "Impulse lag FAST — G_3bp_10s + H_5bp_10s only (fastest combos, proven winners). Wide entry, no dead zone",
+    "MIN_ENTRY_PRICE": 0.10,
+    "MAX_ENTRY_PRICE": 0.90,
+    "MAX_IMPULSE_BP": 30,
+    "DEAD_ZONE_START": 0,
+    "DEAD_ZONE_END": 0,
+    "ENABLED_COMBOS": ["G_3bp_10s", "H_5bp_10s"]
+}

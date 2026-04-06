@@ -1,0 +1,6 @@
+{
+    "_description": "Book fade TIGHT delta — 5bp max (default 8bp). Tests if purer non-fundamental imbalances have better R:R",
+    "ARCHITECTURE": "book_fade",
+    "BF_MAX_DELTA_BPS": 5,
+    "ENABLED_COMBOS": ["BF_1.5x_fast", "BF_2x_fast"]
+}

@@ -14,8 +14,8 @@ if [ -n "$1" ]; then
     mkdir -p data/$1
     rsync -avz ${USER}@${HOST}:${RPATH}/data/$1/ ./data/$1/
 else
-    # All data
-    rsync -avz --include='*/' --include='*.csv' --exclude='*' ${USER}@${HOST}:${RPATH}/data/ ./data/
+    # All data — exclude archives, sync CSVs + stats.json, delete local dirs not on VPS
+    rsync -avz --include='*/' --include='*.csv' --include='*.json' --exclude='_archive*' --exclude='*.parquet' --exclude='*.log' --exclude='.gitkeep' ${USER}@${HOST}:${RPATH}/data/ ./data/ --delete
 fi
 
 echo ""

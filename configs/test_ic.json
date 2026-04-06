@@ -1,0 +1,1 @@
+{"_description": "Impulse confirmed — G_3bp_10s + H_5bp_10s with Coinbase/Bybit confirmation, dead zone ON", "ARCHITECTURE": "impulse_confirmed", "MIN_ENTRY_PRICE": 0.15, "MAX_ENTRY_PRICE": 0.85, "MAX_IMPULSE_BP": 30, "DEAD_ZONE_START": 90, "DEAD_ZONE_END": 210, "ENABLED_COMBOS": ["G_3bp_10s", "H_5bp_10s"]}

@@ -1,0 +1,5 @@
+{
+    "_description": "Micro scalp DELTA only — MS_delta is 75% WR +$1424. MS_2sig was anti-alpha (37% WR, -$1045), removed",
+    "ARCHITECTURE": "micro_scalp",
+    "ENABLED_COMBOS": ["MS_delta"]
+}

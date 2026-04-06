@@ -1,0 +1,1 @@
+{"_description": "A/B: delta_sniper without DS_2c_extreme", "ARCHITECTURE": "delta_sniper", "ENABLED_COMBOS": ["DS_2c_gap", "DS_3c_gap", "DS_5c_gap", "DS_3c_strong", "DS_5c_strong"]}

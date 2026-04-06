@@ -55,6 +55,12 @@ def check_signals(state, now_s):
     """Book fade signal detection — trade against PM orderbook imbalance."""
     import bot.paper_trade_v2 as engine
 
+    # Read configurable params from engine (allows config JSON overrides)
+    _max_delta = getattr(engine, 'BF_MAX_DELTA_BPS', BF_MAX_DELTA_BPS)
+    _min_book_size = getattr(engine, 'BF_MIN_BOOK_SIZE', BF_MIN_BOOK_SIZE)
+    _min_entry = getattr(engine, 'BF_MIN_ENTRY_PRICE', BF_MIN_ENTRY_PRICE)
+    _max_entry = getattr(engine, 'BF_MAX_ENTRY_PRICE', BF_MAX_ENTRY_PRICE)
+
     if not state.window_active:
         return
     if time.time() < state.cooldown_until:
@@ -73,7 +79,7 @@ def check_signals(state, now_s):
     # Compute current imbalance
     bid_size = sum(s for _, s in state.book.bids[:5])
     ask_size = sum(s for _, s in state.book.asks[:5])
-    if bid_size < BF_MIN_BOOK_SIZE or ask_size < BF_MIN_BOOK_SIZE:
+    if bid_size < _min_book_size or ask_size < _min_book_size:
         return
 
     ratio = bid_size / ask_size  # >1 = bid heavy (market pricing UP), <1 = ask heavy (DOWN)
@@ -102,21 +108,21 @@ def check_signals(state, now_s):
 
         # BID HEAVY (ratio >> 1): market pricing UP aggressively
         # Fade by buying NO if BTC delta is small
-        if ratio >= threshold and abs(delta_bps) <= BF_MAX_DELTA_BPS:
+        if ratio >= threshold and abs(delta_bps) <= _max_delta:
             # Check persistence
             if _check_persistence(now_s, lambda r: r >= threshold, confirm):
                 no_cost = 1.0 - state.book.best_bid
-                if BF_MIN_ENTRY_PRICE <= no_cost <= BF_MAX_ENTRY_PRICE:
+                if _min_entry <= no_cost <= _max_entry:
                     engine.execute_paper_trade(combo, "NO", ratio, time_remaining, state.book.best_bid)
                     continue
 
         # ASK HEAVY (1/ratio >> 1 i.e. ratio << 1): market pricing DOWN aggressively
         # Fade by buying YES if BTC delta is small
         inv_ratio = 1.0 / ratio if ratio > 0 else 99.0
-        if inv_ratio >= threshold and abs(delta_bps) <= BF_MAX_DELTA_BPS:
+        if inv_ratio >= threshold and abs(delta_bps) <= _max_delta:
             if _check_persistence(now_s, lambda r: (1.0/r if r > 0 else 99) >= threshold, confirm):
                 yes_cost = state.book.best_ask
-                if BF_MIN_ENTRY_PRICE <= yes_cost <= BF_MAX_ENTRY_PRICE:
+                if _min_entry <= yes_cost <= _max_entry:
                     engine.execute_paper_trade(combo, "YES", inv_ratio, time_remaining, yes_cost)
 
 

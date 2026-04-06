@@ -1,0 +1,1 @@
+{"_description": "Cross-exchange pressure LOOSE — 2 exchanges enough, lower thresholds", "ARCHITECTURE": "cross_pressure", "ENABLED_COMBOS": ["XP_2ex_5bp", "XP_2ex_8bp", "XP_3ex_3bp"]}

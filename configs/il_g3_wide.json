@@ -1,0 +1,9 @@
+{
+    "_description": "Impulse lag G_3bp_10s wide entry — testing 30-70c range (avoids 0-30c bleed and 70-90c low R:R)",
+    "MIN_ENTRY_PRICE": 0.30,
+    "MAX_ENTRY_PRICE": 0.70,
+    "MAX_IMPULSE_BP": 25,
+    "DEAD_ZONE_START": 0,
+    "DEAD_ZONE_END": 0,
+    "ENABLED_COMBOS": ["G_3bp_10s"]
+}

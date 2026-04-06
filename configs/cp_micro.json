@@ -1,0 +1,6 @@
+{
+    "_description": "Certainty premium MICRO sizing — $25/trade, 50 shares max. Caps worst loss at ~$25 instead of $280. All combos",
+    "ARCHITECTURE": "certainty_premium",
+    "BASE_TRADE_DOLLARS": 25,
+    "MAX_SHARES": 50
+}

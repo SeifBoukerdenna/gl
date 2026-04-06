@@ -340,7 +340,8 @@ def _compute_risk_metrics(pnls):
     import math
     n = len(pnls)
     if n < 2:
-        return {"sharpe": 0, "sortino": 0, "max_dd": 0, "best": 0, "worst": 0}
+        return {"sharpe": 0, "sortino": 0, "max_dd": 0, "best": 0, "worst": 0,
+                "expectancy": 0, "rr": 0, "avg_win": 0, "avg_loss": 0}
     mean = sum(pnls) / n
     var = sum((p - mean) ** 2 for p in pnls) / (n - 1)
     std = math.sqrt(var) if var > 0 else 0.001
@@ -361,9 +362,18 @@ def _compute_risk_metrics(pnls):
         dd = peak - cum
         if dd > max_dd:
             max_dd = dd
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p < 0]
+    avg_win = sum(wins) / len(wins) if wins else 0
+    avg_loss = abs(sum(losses) / len(losses)) if losses else 0
+    wr = len(wins) / n
+    expectancy = round(wr * avg_win - (1 - wr) * avg_loss, 2)
+    rr = round(avg_win / avg_loss, 2) if avg_loss > 0 else 99.99
     return {
         "sharpe": sharpe, "sortino": sortino,
         "max_dd": round(max_dd), "best": round(max(pnls), 1), "worst": round(min(pnls), 1),
+        "expectancy": expectancy, "rr": rr,
+        "avg_win": round(avg_win, 1), "avg_loss": round(avg_loss, 1),
     }
 
 
@@ -441,6 +451,8 @@ def get_analysis_data():
             "pnl": round(pnl), "avg_pnl": round(pnl / n, 1) if n > 0 else 0,
             "sharpe": risk["sharpe"], "sortino": risk["sortino"],
             "max_dd": risk["max_dd"], "best": risk["best"], "worst": risk["worst"],
+            "expectancy": risk["expectancy"], "rr": risk["rr"],
+            "avg_win": risk["avg_win"], "avg_loss": risk["avg_loss"],
             "combos": combo_list, "has_charts": has_charts,
         })
 
@@ -484,7 +496,7 @@ def get_analysis_data():
     arch_summaries = []
     for a, v in arch_map.items():
         n = v["trades"]
-        risk = _compute_risk_metrics(v["pnl_list"]) if len(v["pnl_list"]) >= 2 else {"sharpe": 0, "sortino": 0, "max_dd": 0, "best": 0, "worst": 0}
+        risk = _compute_risk_metrics(v["pnl_list"]) if len(v["pnl_list"]) >= 2 else {"sharpe": 0, "sortino": 0, "max_dd": 0, "best": 0, "worst": 0, "expectancy": 0, "rr": 0, "avg_win": 0, "avg_loss": 0}
         arch_summaries.append({
             "architecture": a, "trades": n,
             "wins": v["wins"],
@@ -493,14 +505,56 @@ def get_analysis_data():
             "avg_pnl": round(v["pnl"] / n, 1) if n > 0 else 0,
             "sharpe": risk["sharpe"], "sortino": risk["sortino"],
             "max_dd": risk["max_dd"],
+            "expectancy": risk["expectancy"], "rr": risk["rr"],
+            "avg_win": risk["avg_win"], "avg_loss": risk["avg_loss"],
         })
     arch_summaries.sort(key=lambda x: x["sharpe"], reverse=True)
+
+    # A/B test comparisons: group sessions by architecture
+    ab_groups = {}
+    for s in session_summaries:
+        a = s["architecture"]
+        if a not in ab_groups:
+            ab_groups[a] = []
+        ab_groups[a].append(s)
+
+    ab_tests = []
+    for arch, group_sessions in ab_groups.items():
+        if len(group_sessions) < 2:
+            continue
+        entries = []
+        for s in group_sessions:
+            entries.append({
+                "name": s["name"], "trades": s["trades"], "wins": s["wins"],
+                "wr": s["wr"], "pnl": s["pnl"], "avg_pnl": s["avg_pnl"],
+                "sharpe": s["sharpe"], "sortino": s["sortino"], "max_dd": s["max_dd"],
+                "combos": s["combos"],
+            })
+        # Determine winner: highest $/trade among sessions with 30+ trades
+        qualified = [e for e in entries if e["trades"] >= 30]
+        if len(qualified) >= 2:
+            best = max(qualified, key=lambda e: e["avg_pnl"])
+            second = sorted(qualified, key=lambda e: e["avg_pnl"], reverse=True)[1]
+            wr_diff = abs(best["wr"] - second["wr"])
+            if wr_diff < 2.0:
+                winner = "inconclusive"
+            else:
+                winner = best["name"]
+        else:
+            winner = "insufficient data"
+        ab_tests.append({
+            "architecture": arch,
+            "sessions": entries,
+            "winner": winner,
+        })
+    ab_tests.sort(key=lambda x: len(x["sessions"]), reverse=True)
 
     return {
         "sessions": session_summaries,
         "architectures": arch_summaries,
         "best_combos": all_combos[:20],
         "has_comparison": has_comparison,
+        "ab_tests": ab_tests,
     }
 
 
@@ -561,6 +615,8 @@ a{color:var(--blue);text-decoration:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeIn{from{opacity:.7}to{opacity:1}}
 .fade-in{animation:fadeIn .2s ease}
+@keyframes deltaFade{0%{opacity:1;transform:translateY(0)}90%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-6px)}}
+.ov-delta{display:inline-block;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-left:6px;animation:deltaFade 30s ease-out forwards}
 
 /* Stat boxes */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px}
@@ -832,7 +888,16 @@ function updateOverview() {
 }
 
 // ═══ Overview ═══
-S._ovSort='pnl'; S._ovArch=''; S._ovDir='desc';
+S._ovSort='pnl'; S._ovArchSet=new Set(); S._ovDir='desc'; S._ovChartData=null; S._ovChartDirty=true; S._ovTimeAxis=false;
+S._ovPrev={pnl:null,trades:null,wr:null};
+function ovDeltaBadge(cur,prev,fmt){
+    if(prev===null||prev===cur) return '';
+    const d=cur-prev;
+    if(Math.abs(d)<0.01) return '';
+    const c=d>0?'var(--green)':'var(--red)';
+    const s=d>0?'+':'';
+    return '<span class="ov-delta" style="color:'+c+'">'+s+fmt(d)+'</span>';
+}
 function _ovSortSessions(ss){
     const key=S._ovSort, dir=S._ovDir==='desc'?-1:1;
     return [...ss].sort((a,b)=>{
@@ -852,7 +917,185 @@ function ovSetSort(key){
     else{S._ovSort=key;S._ovDir='desc'}
     renderOverview(document.getElementById('content'));
 }
-function ovSetArch(arch){S._ovArch=arch;renderOverview(document.getElementById('content'))}
+function ovToggleTimeAxis(){
+    S._ovTimeAxis=!S._ovTimeAxis;
+    if(S._ovChartData) ovBuildCumChart();
+    const btn=document.getElementById('ov-time-btn');
+    if(btn) btn.textContent=S._ovTimeAxis?'Show by Trade #':'Show by Time';
+}
+function ovSelectPositive(){
+    const ss=S.sessions;
+    const archPnl={};
+    ss.forEach(s=>{const a=s.architecture||'impulse_lag';archPnl[a]=(archPnl[a]||0)+(s.pnl_taker||0)});
+    S._ovArchSet=new Set(Object.entries(archPnl).filter(([a,p])=>p>0).map(([a])=>a));
+    renderOverview(document.getElementById('content'));
+    if(S._ovChartData) setTimeout(()=>ovBuildCumChart(),50);
+}
+function ovToggleArch(arch){
+    if(arch===''){S._ovArchSet.clear()}
+    else if(S._ovArchSet.has(arch)){S._ovArchSet.delete(arch)}
+    else{S._ovArchSet.add(arch)}
+    renderOverview(document.getElementById('content'));
+    // Rebuild charts from cached data after DOM update
+    if(S._ovChartData) setTimeout(()=>ovBuildCumChart(),50);
+}
+async function ovSyncChart(){
+    // Pull fresh data from VPS, then rebuild charts
+    const btn=document.querySelector('#ov-charts-zone .btn-blue');
+    if(btn){btn.textContent='Syncing...';btn.disabled=true}
+    S._ovChartData=null;
+    try{S._ovChartData=await(await fetch('/api/pull-analyze',{method:'POST'})).json()}catch(e){
+        try{S._ovChartData=await api('/api/chart-data')}catch(e2){}}
+    ovBuildCumChart();
+    if(btn){btn.textContent='Sync Chart';btn.disabled=false}
+}
+async function ovLoadChart(){
+    // Only auto-load on first render or if dirty, otherwise keep existing chart
+    if(!S._ovChartData && S._ovChartDirty){
+        try{S._ovChartData=await api('/api/chart-data')}catch(e){return}
+        ovBuildCumChart();
+        S._ovChartDirty=false;
+    } else if(S._ovChartData && !chartInstances['ov-cum-chart']){
+        // Chart canvas was recreated by render but chart not rebuilt — rebuild from cache
+        ovBuildCumChart();
+    }
+}
+function ovBuildCumChart(){
+    if(!S._ovChartData) return;
+    ['ov-cum-chart','ov-wr-chart'].forEach(id=>{if(chartInstances[id]){try{chartInstances[id].destroy()}catch(e){}}delete chartInstances[id]});
+    const cd=S._ovChartData.sessions||{};
+    const selected=S._ovArchSet.size>0?S._ovArchSet:new Set(Object.values(cd).map(s=>s.architecture));
+
+    // Collect all trades across selected sessions with timestamps
+    const allTrades=[];  // {pnl, arch, ts}
+    Object.entries(cd).forEach(([name,s])=>{
+        const a=s.architecture||'impulse_lag';
+        if(!selected.has(a)) return;
+        const cum=s.cum_pnl||[];
+        const ts=s.cum_ts||[];
+        let prev=0;
+        cum.forEach((v,i)=>{const diff=v-prev; allTrades.push({pnl:diff,arch:a,ts:ts[i]||0}); prev=v});
+    });
+    // Sort by timestamp for time-axis mode
+    if(S._ovTimeAxis) allTrades.sort((a,b)=>a.ts-b.ts);
+    // Group by architecture
+    const archTrades={};
+    allTrades.forEach(t=>{if(!archTrades[t.arch]) archTrades[t.arch]=[];archTrades[t.arch].push(t)});
+
+    // Portfolio cumulative PnL
+    const portCum=[]; const portTs=[]; let portRunning=0;
+    allTrades.forEach(t=>{portRunning+=t.pnl; portCum.push(Math.round(portRunning*10)/10); portTs.push(t.ts)});
+
+    // Per-architecture cumulative PnL
+    const archCum={};
+    for(const a in archTrades){
+        archCum[a]=[]; let r=0;
+        archTrades[a].forEach(t=>{r+=t.pnl; archCum[a].push(Math.round(r*10)/10)});
+    }
+    const archNames=Object.keys(archCum).sort((a,b)=>(archCum[b][archCum[b].length-1]||0)-(archCum[a][archCum[a].length-1]||0));
+
+    // Build x-axis labels
+    const xLabels=S._ovTimeAxis
+        ? portTs.map(ts=>{if(!ts)return'';const d=new Date(ts*1000);return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false})})
+        : portCum.map((_,i)=>i+1);
+
+    // Portfolio rolling WR
+    const wrWindow=20;
+    const portWr=[];
+    let portWinCount=0;
+    allTrades.forEach((t,j)=>{
+        portWinCount+=(t.pnl>0?1:0);
+        if(j>=wrWindow) portWinCount-=(allTrades[j-wrWindow].pnl>0?1:0);
+        if(j>=wrWindow-1) portWr.push(Math.round(portWinCount/wrWindow*1000)/10);
+    });
+
+    // Per-architecture rolling WR
+    const archWr={};
+    archNames.forEach(a=>{
+        const trades=archTrades[a];
+        if(trades.length<wrWindow) return;
+        archWr[a]=[];
+        let wc=0;
+        trades.forEach((p,j)=>{
+            wc+=(p>0?1:0);
+            if(j>=wrWindow) wc-=(trades[j-wrWindow]>0?1:0);
+            if(j>=wrWindow-1) archWr[a].push(Math.round(wc/wrWindow*1000)/10);
+        });
+    });
+
+    const crosshairPlugin={id:'ov-cross',afterDraw(c){if(c._crosshairX==null)return;const ctx=c.ctx,y=c.chartArea;ctx.save();ctx.beginPath();ctx.moveTo(c._crosshairX,y.top);ctx.lineTo(c._crosshairX,y.bottom);ctx.lineWidth=1;ctx.strokeStyle='rgba(255,255,255,.15)';ctx.setLineDash([4,4]);ctx.stroke();ctx.restore()},afterEvent(c,args){const e=args.event;if(e.type==='mousemove'&&c.chartArea){c._crosshairX=(e.x>=c.chartArea.left&&e.x<=c.chartArea.right)?e.x:null}else if(e.type==='mouseout'){c._crosshairX=null}c.draw()}};
+    const ttStyle={backgroundColor:'rgba(17,22,34,.95)',titleColor:'#d1d5e0',bodyColor:'#d1d5e0',borderColor:'#243049',borderWidth:1,
+        bodyFont:{family:'JetBrains Mono',size:10},cornerRadius:6,displayColors:true,boxWidth:6,boxHeight:6};
+    const legendCfg={position:'bottom',labels:{color:'#d1d5e0',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:6,usePointStyle:true},
+        onClick(e,item,legend){const ci=legend.chart;const idx=item.datasetIndex;ci.isDatasetVisible(idx)?ci.hide(idx):ci.show(idx)}};
+
+    // ── Cumulative PnL chart ──
+    const cumDs=[];
+    // Portfolio total line (always visible, white, thick)
+    const portFinal=portCum.length?portCum[portCum.length-1]:0;
+    cumDs.push({label:'Portfolio ($'+(portFinal>=0?'+':'')+portFinal.toFixed(0)+')',
+        data:portCum,borderColor:'rgba(255,255,255,.9)',borderWidth:3,
+        pointRadius:0,pointHoverRadius:5,tension:.15,fill:false});
+    // Per-architecture lines (hidden by default, click legend to show)
+    archNames.forEach((a,i)=>{
+        const cum=archCum[a];
+        const final=cum[cum.length-1]||0;
+        cumDs.push({label:a.replace(/_/g,' ')+' ($'+(final>=0?'+':'')+final.toFixed(0)+')',
+            data:cum,borderColor:COLORS[i%COLORS.length],borderWidth:2,
+            pointRadius:0,pointHoverRadius:4,tension:.15,fill:false,hidden:true});
+    });
+    const cumMaxLen=Math.max(...cumDs.map(d=>d.data.length),1);
+    makeChart('ov-cum-chart',{type:'line',data:{labels:xLabels.length?xLabels:Array.from({length:cumMaxLen},(_,i)=>i+1),datasets:cumDs},
+        options:{responsive:true,maintainAspectRatio:false,
+            interaction:{mode:'index',intersect:false},hover:{mode:'index',intersect:false},
+            plugins:{legend:legendCfg,
+                tooltip:{...ttStyle,mode:'index',intersect:false,itemSort:(a,b)=>b.parsed.y-a.parsed.y,
+                    callbacks:{title(items){return S._ovTimeAxis?items[0].label:'Trade #'+items[0].label},
+                        label(ctx){const v=ctx.parsed.y;return ' '+ctx.dataset.label.split(' (')[0]+': $'+(v>=0?'+':'')+v.toFixed(0)}}},
+                title:{display:true,text:'Cumulative PnL (click legend to show per-architecture)',color:'#d1d5e0',font:{size:12}}},
+            scales:{x:{ticks:{color:'#5a6478',font:{size:9},maxTicksLimit:20},grid:{color:'rgba(26,34,54,.5)'}},
+                y:{ticks:{color:'#5a6478',font:{size:10},callback:v=>'$'+v.toLocaleString()},grid:{color:'rgba(26,34,54,.5)'}}}
+        },plugins:[crosshairPlugin]});
+
+    // ── Rolling Win Rate chart ──
+    const wrDs=[];
+    // Portfolio WR line (always visible)
+    if(portWr.length>0){
+        wrDs.push({label:'Portfolio ('+portWr[portWr.length-1].toFixed(1)+'%)',
+            data:portWr,borderColor:'rgba(255,255,255,.9)',borderWidth:3,
+            pointRadius:0,pointHoverRadius:4,tension:.2,fill:false});
+    }
+    // Per-architecture WR lines (hidden by default)
+    archNames.forEach((a,i)=>{
+        if(!archWr[a]||archWr[a].length===0) return;
+        wrDs.push({label:a.replace(/_/g,' '),data:archWr[a],
+            borderColor:COLORS[i%COLORS.length],borderWidth:2,
+            pointRadius:0,pointHoverRadius:4,tension:.2,fill:false,hidden:true});
+    });
+    if(wrDs.length>0){
+        const wrMaxLen=Math.max(...wrDs.map(d=>d.data.length));
+        const wrLabels=S._ovTimeAxis
+            ? portTs.slice(wrWindow-1).map(ts=>{if(!ts)return'';const d=new Date(ts*1000);return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false})})
+            : Array.from({length:wrMaxLen},(_,i)=>i+wrWindow);
+        makeChart('ov-wr-chart',{type:'line',data:{labels:wrLabels.length>=wrMaxLen?wrLabels.slice(0,wrMaxLen):Array.from({length:wrMaxLen},(_,i)=>i+wrWindow),datasets:wrDs},
+            options:{responsive:true,maintainAspectRatio:false,
+                interaction:{mode:'index',intersect:false},hover:{mode:'index',intersect:false},
+                plugins:{legend:legendCfg,
+                    tooltip:{...ttStyle,mode:'index',intersect:false,itemSort:(a,b)=>b.parsed.y-a.parsed.y,
+                        callbacks:{title(items){return S._ovTimeAxis?items[0].label:'Trade #'+items[0].label},
+                            label(ctx){return ' '+ctx.dataset.label.split(' (')[0]+': '+ctx.parsed.y.toFixed(1)+'%'}}},
+                    title:{display:true,text:'Rolling Win Rate ('+wrWindow+'-trade window, click legend for per-arch)',color:'#d1d5e0',font:{size:12}}},
+                scales:{x:{ticks:{color:'#5a6478',font:{size:9},maxTicksLimit:20},grid:{color:'rgba(26,34,54,.5)'}},
+                    y:{ticks:{color:'#5a6478',font:{size:10},callback:v=>v+'%'},grid:{color:'rgba(26,34,54,.5)'},min:0,max:100}}
+            },plugins:[crosshairPlugin,{id:'wr-refs',afterDraw(chart){
+                const ctx=chart.ctx,y=chart.chartArea,yScale=chart.scales.y;
+                [50,65].forEach(v=>{const yPos=yScale.getPixelForValue(v);
+                    ctx.save();ctx.beginPath();ctx.moveTo(y.left,yPos);ctx.lineTo(y.right,yPos);
+                    ctx.lineWidth=1;ctx.strokeStyle=v===50?'rgba(239,68,68,.3)':'rgba(16,185,129,.3)';
+                    ctx.setLineDash([6,4]);ctx.stroke();ctx.restore()});
+            }}]});
+    }
+}
 function renderOverview(el) {
     let ss = S.sessions;
     if (!ss.length) { el.innerHTML = '<div class="empty"><div style="font-size:28px;opacity:.3">&#x1f4e1;</div><div class="empty-title">No sessions with data</div><div class="d" style="margin-top:4px;font-size:11px">Run <code>pm pull</code> to sync VPS data, or start a new session</div></div>'; return; }
@@ -860,8 +1103,8 @@ function renderOverview(el) {
     // Collect unique architectures
     const allArchs=[...new Set(ss.map(s=>s.architecture||'impulse_lag'))].sort();
 
-    // Filter by architecture
-    const filtered=S._ovArch?ss.filter(s=>(s.architecture||'impulse_lag')===S._ovArch):ss;
+    // Filter by selected architectures (multi-select)
+    const filtered=S._ovArchSet.size>0?ss.filter(s=>S._ovArchSet.has(s.architecture||'impulse_lag')):ss;
 
     const tot = filtered.reduce((a,s) => a+(s.trades||0), 0);
     const pnl = filtered.reduce((a,s) => a+(s.pnl_taker||0), 0);
@@ -874,11 +1117,14 @@ function renderOverview(el) {
     // Architecture summary pills
     const archStats={};
     ss.forEach(s=>{const a=s.architecture||'impulse_lag';if(!archStats[a])archStats[a]={pnl:0,trades:0,wins:0,sessions:0};archStats[a].pnl+=(s.pnl_taker||0);archStats[a].trades+=(s.trades||0);archStats[a].wins+=(s.wins||0);archStats[a].sessions++});
-    let archPills='<button class="btn btn-sm'+(S._ovArch?'':' btn-blue')+'" style="font-size:10px;padding:3px 10px" onclick="ovSetArch(\'\')">All</button>';
+    const positiveArchs=Object.entries(archStats).filter(([a,v])=>v.pnl>0).map(([a])=>a);
+    const isPosActive=positiveArchs.length>0&&positiveArchs.length===S._ovArchSet.size&&positiveArchs.every(a=>S._ovArchSet.has(a));
+    let archPills='<button class="btn btn-sm'+(S._ovArchSet.size===0?' btn-blue':'')+'" style="font-size:10px;padding:3px 10px" onclick="ovToggleArch(\'\')">All</button>';
+    archPills+='<button class="btn btn-sm'+(isPosActive?' btn-blue':'')+'" style="font-size:10px;padding:3px 10px;border-color:var(--green-border);color:var(--green)" onclick="ovSelectPositive()">Profitable Only</button>';
     Object.entries(archStats).sort((a,b)=>b[1].pnl-a[1].pnl).forEach(([a,v])=>{
-        const active=S._ovArch===a;
+        const active=S._ovArchSet.has(a);
         const awr=v.trades>0?(v.wins/v.trades*100).toFixed(0):'0';
-        archPills+=`<button class="btn btn-sm${active?' btn-blue':''}" style="font-size:10px;padding:3px 10px" onclick="ovSetArch('${a}')">
+        archPills+=`<button class="btn btn-sm${active?' btn-blue':''}" style="font-size:10px;padding:3px 10px" onclick="ovToggleArch('${a}')">
             ${a.replace(/_/g,' ')} <span class="${pc(v.pnl)}" style="font-weight:700">${fp(v.pnl)}</span>
             <span class="d">${v.trades}t ${awr}%</span></button>`;
     });
@@ -912,17 +1158,75 @@ function renderOverview(el) {
     });
     if (!filtered.length) cards = '<div class="empty"><div class="empty-title">No sessions match filter</div></div>';
 
-    el.innerHTML = `
+    // Compute runtime from session data
+    const totalWindows=filtered.reduce((a,s)=>a+(s.windows_settled||0),0);
+    const startTimes=filtered.map(s=>s.started||0).filter(t=>t>0);
+    let runtimeStr='\u2014';
+    if(startTimes.length>0){
+        const earliest=Math.min(...startTimes);
+        const nowSec=Date.now()/1000;
+        const runSec=Math.max(0,nowSec-earliest);
+        const rh=Math.floor(runSec/3600);
+        const rm=Math.floor((runSec%3600)/60);
+        runtimeStr=rh>0?rh+'h '+rm+'m':rm+'m';
+    }
+
+    // Split rendering: charts zone is preserved, only stats/cards are updated
+    const chartsExist=el.querySelector('#ov-charts-zone');
+    if(!chartsExist){
+        // First render — build full page including chart containers
+        el.innerHTML = `
+        <div id="ov-dynamic-zone"></div>
+        <div id="ov-charts-zone">
+          <div class="card" style="padding:16px;margin:12px 0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span class="d" style="font-size:11px">Cumulative PnL by Architecture</span>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm" id="ov-time-btn" style="font-size:10px;padding:2px 10px" onclick="ovToggleTimeAxis()">${S._ovTimeAxis?'Show by Trade #':'Show by Time'}</button>
+                <button class="btn btn-sm btn-blue" style="font-size:10px;padding:2px 10px" onclick="ovSyncChart()">Sync Chart</button>
+              </div>
+            </div>
+            <div style="height:300px"><canvas id="ov-cum-chart"></canvas></div>
+          </div>
+          <div class="card" style="padding:16px;margin:0 0 12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span class="d" style="font-size:11px">Rolling Win Rate by Architecture</span>
+            </div>
+            <div style="height:250px"><canvas id="ov-wr-chart"></canvas></div>
+          </div>
+        </div>
+        <div id="ov-sessions-zone"></div>`;
+        // Initial chart load
+        if(!S._ovChartLoading){
+            S._ovChartLoading=true;
+            api('/api/chart-data').then(d=>{S._ovChartData=d;S._ovChartLoading=false;ovBuildCumChart()}).catch(()=>{S._ovChartLoading=false});
+        }
+    }
+
+    // Compute deltas from previous values
+    const pnlNum=Math.round(pnl);
+    const wrNum=parseFloat(wr);
+    const dpnl=ovDeltaBadge(pnlNum,S._ovPrev.pnl,d=>'$'+d.toLocaleString());
+    const dtrades=ovDeltaBadge(tot,S._ovPrev.trades,d=>d.toString());
+    const dwr=ovDeltaBadge(wrNum,S._ovPrev.wr,d=>d.toFixed(1)+'pp');
+    S._ovPrev={pnl:pnlNum,trades:tot,wr:wrNum};
+
+    // Update dynamic zone (stats + filters) — no chart destruction
+    document.getElementById('ov-dynamic-zone').innerHTML = `
     <div class="section-header"><div class="section-title">Overview</div><div class="d mono" style="font-size:10px">Updated ${new Date().toLocaleTimeString()}</div></div>
     <div class="stats-grid">
-      <div class="stat-box"><div class="stat-label">Total PnL${S._ovArch?' ('+S._ovArch.replace(/_/g,' ')+')':''}</div><div class="stat-value ${pc(pnl)}">${fp(pnl)}</div><div class="stat-sub">${fps(avg)} / trade</div></div>
-      <div class="stat-box"><div class="stat-label">Total Trades</div><div class="stat-value b">${tot.toLocaleString()}</div><div class="stat-sub">${filtered.length}${S._ovArch?' / '+ss.length:''} sessions</div></div>
-      <div class="stat-box"><div class="stat-label">Win Rate</div><div class="stat-value ${wc(wr)}">${wr}%</div><div class="stat-sub">${wins}W / ${tot-wins}L</div></div>
+      <div class="stat-box"><div class="stat-label">Total PnL${S._ovArchSet.size>0?' ('+S._ovArchSet.size+' arch)':''}</div><div class="stat-value ${pc(pnl)}">${fp(pnl)}${dpnl}</div><div class="stat-sub">${fps(avg)} / trade</div></div>
+      <div class="stat-box"><div class="stat-label">Total Trades</div><div class="stat-value b">${tot.toLocaleString()}${dtrades}</div><div class="stat-sub">${filtered.length}${S._ovArchSet.size>0?' / '+ss.length:''} sessions</div></div>
+      <div class="stat-box"><div class="stat-label">Win Rate</div><div class="stat-value ${wc(wr)}">${wr}%${dwr}</div><div class="stat-sub">${wins}W / ${tot-wins}L</div></div>
+      <div class="stat-box"><div class="stat-label">Runtime</div><div class="stat-value cy">${runtimeStr}</div><div class="stat-sub">${totalWindows} windows settled</div></div>
       <div class="stat-box"><div class="stat-label">Active</div><div class="stat-value ${act>0?'g':'d'}">${act}</div><div class="stat-sub">sessions running</div></div>
     </div>
     <div style="margin:14px 0 6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <span class="d" style="font-size:10px;margin-right:4px">FILTER</span>${archPills}
-    </div>
+    </div>`;
+
+    // Update sessions zone
+    document.getElementById('ov-sessions-zone').innerHTML = `
     <div class="section-header" style="margin-top:10px">
       <div class="section-title">Sessions</div>
       <div style="display:flex;gap:4px;align-items:center"><span class="d" style="font-size:10px;margin-right:4px">SORT</span>${sortBtns}</div>
@@ -1248,10 +1552,15 @@ async function renderAnalysis(el) {
                 <span>${a.trades} trades</span>
                 <span class="${wc(a.wr)}">${a.wr}%</span>
             </div>
-            <div style="display:flex;gap:12px;margin-top:4px;font-size:10px;color:var(--dim)">
-                <span>Sharpe <b style="color:${a.sharpe>=0.5?'var(--green)':a.sharpe>=0?'var(--yellow)':'var(--red)'}">${a.sharpe.toFixed(2)}</b></span>
-                <span>Sortino <b style="color:${a.sortino>=1?'var(--green)':a.sortino>=0?'var(--yellow)':'var(--red)'}">${sortStr}</b></span>
+            <div style="display:flex;gap:10px;margin-top:4px;font-size:10px;color:var(--dim)">
+                <span>E[X] <b style="color:${(a.expectancy||0)>0?'var(--green)':(a.expectancy||0)<0?'var(--red)':'var(--dim)'}">${fps(a.expectancy||0)}</b></span>
+                <span>R:R <b style="color:${(a.rr||0)>=0.8?'var(--green)':(a.rr||0)>=0.5?'var(--yellow)':'var(--red)'}">${(a.rr||0).toFixed(2)}</b></span>
                 <span>MaxDD <b style="color:${a.max_dd===0?'var(--green)':'var(--red)'}">$${a.max_dd}</b></span>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:2px;font-size:9px;color:var(--dim)">
+                <span>AvgW <b class="g">$${(a.avg_win||0).toFixed(0)}</b></span>
+                <span>AvgL <b class="r">$${(a.avg_loss||0).toFixed(0)}</b></span>
+                <span>Sharpe <b>${a.sharpe.toFixed(2)}</b></span>
             </div>
         </div>`;
     });
@@ -1261,9 +1570,10 @@ async function renderAnalysis(el) {
     sortedNames.forEach((name,i)=>{
         const s=sessions[name];
         const r=sessRisk[name]||{};
-        const sharpe=r.sharpe||0;
-        const sortino=r.sortino||0;
-        const sortStr=sortino>=99?'INF':sortino.toFixed(2);
+        const exp=r.expectancy||0;
+        const rr=r.rr||0;
+        const aw=r.avg_win||0;
+        const al=r.avg_loss||0;
         const maxdd=r.max_dd||0;
         lbRows+=`<tr style="cursor:pointer" onclick="navigate('session','${name}')">
             <td style="font-weight:700;color:${i<3?'var(--yellow)':'var(--dim)'}">#${i+1}</td>
@@ -1273,8 +1583,10 @@ async function renderAnalysis(el) {
             <td class="${wc(s.wr)}">${s.wr}%</td>
             <td class="${pc(s.pnl)}" style="font-weight:700">${fp(s.pnl)}</td>
             <td class="${pc(s.avg_pnl)}">${fps(s.avg_pnl)}</td>
-            <td style="color:${sharpe>=0.5?'var(--green)':sharpe>=0?'var(--yellow)':'var(--red)'}">${sharpe.toFixed(2)}</td>
-            <td style="color:${sortino>=1?'var(--green)':sortino>=0?'var(--yellow)':'var(--red)'}">${sortStr}</td>
+            <td style="font-weight:700;color:${exp>0?'var(--green)':exp<0?'var(--red)':'var(--dim)'}">${fps(exp)}</td>
+            <td style="color:${rr>=0.8?'var(--green)':rr>=0.5?'var(--yellow)':'var(--red)'}">${rr.toFixed(2)}</td>
+            <td class="g" style="font-size:10px">$${aw.toFixed(0)}</td>
+            <td class="r" style="font-size:10px">$${al.toFixed(0)}</td>
             <td style="color:${maxdd===0?'var(--green)':'var(--red)'}">$${maxdd}</td></tr>`;
     });
 
@@ -1308,6 +1620,86 @@ async function renderAnalysis(el) {
         </div>`;
     });
 
+    // A/B Test Comparisons
+    const abTests=d.ab_tests||[];
+    let abSection='';
+    if(abTests.length>0){
+        let abCards='';
+        abTests.forEach(ab=>{
+            const sNames=ab.sessions.map(s=>s.name);
+            const metrics=[
+                {key:'trades',label:'Trades',fmt:v=>v,higher:true},
+                {key:'wr',label:'WR%',fmt:v=>v+'%',higher:true},
+                {key:'pnl',label:'PnL',fmt:v=>fp(v),higher:true},
+                {key:'avg_pnl',label:'$/Trade',fmt:v=>fps(v),higher:true},
+                {key:'sharpe',label:'Sharpe',fmt:v=>v.toFixed(2),higher:true},
+                {key:'max_dd',label:'MaxDD',fmt:v=>'$'+v,higher:false},
+            ];
+            let headerCols=sNames.map(n=>`<th style="text-align:center;min-width:120px">${n}</th>`).join('');
+            let metricRows='';
+            metrics.forEach(m=>{
+                const vals=ab.sessions.map(s=>s[m.key]);
+                const bestVal=m.higher?Math.max(...vals):Math.min(...vals);
+                let cells=ab.sessions.map(s=>{
+                    const v=s[m.key];
+                    const isBest=v===bestVal&&vals.filter(x=>x===bestVal).length===1;
+                    const bg=isBest?'background:rgba(16,185,129,.12);':'';
+                    const clr=isBest?'color:var(--green);font-weight:700':'';
+                    return `<td style="text-align:center;${bg}${clr}">${m.fmt(v)}</td>`;
+                }).join('');
+                metricRows+=`<tr><td style="font-weight:600;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.5px">${m.label}</td>${cells}</tr>`;
+            });
+            // Verdict badge
+            let verdict='';
+            if(ab.winner==='insufficient data'){
+                verdict=`<span class="tag" style="background:rgba(245,158,11,.1);color:var(--yellow);border:1px solid rgba(245,158,11,.2);font-size:10px;padding:3px 10px">INCONCLUSIVE &mdash; insufficient data (&lt;30 trades)</span>`;
+            }else if(ab.winner==='inconclusive'){
+                verdict=`<span class="tag" style="background:rgba(245,158,11,.1);color:var(--yellow);border:1px solid rgba(245,158,11,.2);font-size:10px;padding:3px 10px">INCONCLUSIVE &mdash; WR diff &lt;2pp</span>`;
+            }else{
+                verdict=`<span class="tag" style="background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.2);font-size:10px;padding:3px 10px">WINNER: ${ab.winner}</span>`;
+            }
+            // Collapsible per-combo breakdown
+            const abId='ab-'+ab.architecture.replace(/[^a-zA-Z0-9]/g,'');
+            let comboBreakdown='';
+            // Gather all unique combo names across sessions
+            const allComboNames=new Set();
+            ab.sessions.forEach(s=>(s.combos||[]).forEach(c=>allComboNames.add(c.combo)));
+            if(allComboNames.size>0){
+                const comboArr=[...allComboNames].sort();
+                let comboHeaderCols=sNames.map(n=>`<th colspan="3" style="text-align:center;border-bottom:1px solid var(--border)">${n}</th>`).join('');
+                let comboSubHeader=sNames.map(()=>`<th style="text-align:center;font-size:9px">Trades</th><th style="text-align:center;font-size:9px">WR%</th><th style="text-align:center;font-size:9px">PnL</th>`).join('');
+                let comboRows='';
+                comboArr.forEach(cn=>{
+                    let cells=ab.sessions.map(s=>{
+                        const cm=(s.combos||[]).find(c=>c.combo===cn);
+                        if(!cm) return `<td style="text-align:center;color:var(--dim)">-</td><td style="text-align:center;color:var(--dim)">-</td><td style="text-align:center;color:var(--dim)">-</td>`;
+                        return `<td style="text-align:center">${cm.n}</td><td style="text-align:center" class="${wc(cm.wr)}">${cm.wr}%</td><td style="text-align:center;font-weight:600" class="${pc(cm.pnl)}">${fp(cm.pnl)}</td>`;
+                    }).join('');
+                    comboRows+=`<tr><td style="font-weight:600">${cn}</td>${cells}</tr>`;
+                });
+                comboBreakdown=`
+                <div style="margin-top:10px">
+                    <div class="collapsible" style="font-size:11px;color:var(--dim);padding:4px 0" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show')">Per-Combo Breakdown</div>
+                    <div class="collapse-body">
+                        <div style="overflow-x:auto;margin-top:6px"><table><thead><tr><th>Combo</th>${comboHeaderCols}</tr><tr><th></th>${comboSubHeader}</tr></thead><tbody>${comboRows}</tbody></table></div>
+                    </div>
+                </div>`;
+            }
+            abCards+=`<div class="card" style="margin-bottom:12px">
+                <div class="card-header"><h3>${ab.architecture.replace(/_/g,' ')}</h3><div>${verdict}</div></div>
+                <div style="padding:14px 18px">
+                    <div style="overflow-x:auto"><table><thead><tr><th>Metric</th>${headerCols}</tr></thead><tbody>${metricRows}</tbody></table></div>
+                    ${comboBreakdown}
+                </div>
+            </div>`;
+        });
+        abSection=`
+        <div class="analysis-section">
+            <div class="analysis-section-title"><span style="color:var(--purple)">&#9878;</span> A/B Test Comparisons</div>
+            ${abCards}
+        </div>`;
+    }
+
     el.innerHTML=`
     <div class="section-header"><div class="section-title">Analysis</div>
         <button class="btn btn-blue btn-sm" id="pa-btn" onclick="pullAndAnalyze()">Sync & Analyze</button>
@@ -1318,9 +1710,11 @@ async function renderAnalysis(el) {
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${archCards}</div>
     </div>
 
+    ${abSection}
+
     <div class="analysis-section">
         <div class="analysis-section-title"><span style="color:var(--yellow)">&#9733;</span> Session Leaderboard</div>
-        <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Session</th><th>Arch</th><th>Trades</th><th>Win%</th><th>PnL</th><th>$/Trade</th><th>Sharpe</th><th>Sortino</th><th>MaxDD</th></tr></thead><tbody>${lbRows}</tbody></table></div></div>
+        <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Session</th><th>Arch</th><th>Trades</th><th>Win%</th><th>PnL</th><th>$/Trade</th><th>E[X]</th><th>R:R</th><th>AvgW</th><th>AvgL</th><th>MaxDD</th></tr></thead><tbody>${lbRows}</tbody></table></div></div>
     </div>
 
     <!-- Interactive Charts -->
@@ -1529,7 +1923,10 @@ function tickTimer(){
     const anySession = Object.values(_sseVpsCache)[0];
     if(anySession && anySession.window_end) {
         const now=Date.now()/1000;
-        const trem=Math.max(0,Math.floor(anySession.window_end-now));
+        let we=anySession.window_end;
+        // If window_end is in the past, predict next window (300s intervals)
+        while(we<=now) we+=300;
+        const trem=Math.max(0,Math.floor(we-now));
         const pct=Math.min(100,((300-trem)/300)*100);
         const gt=document.getElementById('g-timer');
         const gp=document.getElementById('g-progress');
@@ -1547,7 +1944,9 @@ function tickTimer(){
         const d=S.selectedSession?S.sessionData[S.selectedSession]:null;
         if(d&&d.window_end) {
             const now=Date.now()/1000;
-            const trem=Math.max(0,Math.floor(d.window_end-now));
+            let we2=d.window_end;
+            while(we2<=now) we2+=300;
+            const trem=Math.max(0,Math.floor(we2-now));
             const pct=Math.min(100,((300-trem)/300)*100);
             timerEl.textContent=Math.floor(trem/60)+':'+String(trem%60).padStart(2,'0');
             timerEl.style.color=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)';
@@ -1702,24 +2101,31 @@ function _updateOverviewFromSSE(){
         trades: d.trades || 0, wins: d.wins || 0,
         wr: d.wr ? Number(d.wr) : 0,
         pnl_taker: Math.round(d.pnl_taker || 0),
+        windows_settled: d.windows_settled || 0,
+        updated: d.updated || 0,
+        started: d.started || 0,
     }));
     S.sessions = sessions;
 
-    // Only do a full render if the page structure doesn't exist yet
+    // Re-render overview (updates stats, filters, session cards — preserves chart zone)
     const el = document.getElementById('content');
-    if(!el || !el.querySelector('.sessions-grid') || S.lastRenderedPage !== 'overview') {
+    if(!el || S.lastRenderedPage !== 'overview') {
         renderOverview(el);
         return;
     }
+    // Check if data actually changed before re-rendering
+    const newJSON = JSON.stringify(sessions);
+    if(newJSON === S.lastDataJSON) return;
+    renderOverview(el);
+    return;
 
-    // Otherwise, update totals in-place (no DOM rebuild = no flicker)
+    // Dead code below — kept for reference but bypassed by the return above
     const tot = sessions.reduce((a,s) => a+(s.trades||0), 0);
     const pnl = sessions.reduce((a,s) => a+(s.pnl_taker||0), 0);
     const wins = sessions.reduce((a,s) => a+(s.wins||0), 0);
     const wr = tot > 0 ? (wins/tot*100).toFixed(1) : 0;
     const act = sessions.filter(s => s.status==='active').length;
 
-    // Update stat boxes by index
     const statVals = el.querySelectorAll('.stat-value');
     const statSubs = el.querySelectorAll('.stat-sub');
     if(statVals.length >= 4) {
@@ -2116,12 +2522,14 @@ def get_chart_data():
         wins = sum(1 for t in trades if t["result"].strip() == "WIN")
         total_pnl = sum(float(t.get("pnl_taker", 0) or 0) for t in trades)
 
-        # Cumulative PnL series
+        # Cumulative PnL series (with timestamps for time-axis)
         cum = []
+        cum_ts = []
         running = 0.0
         for t in trades:
             running += float(t.get("pnl_taker", 0) or 0)
             cum.append(round(running, 1))
+            cum_ts.append(round(float(t.get("timestamp", 0) or 0)))
 
         # Per-combo breakdown with cum PnL
         combos = {}
@@ -2168,7 +2576,7 @@ def get_chart_data():
             "architecture": arch,
             "trades": n, "wins": wins, "pnl": round(total_pnl),
             "wr": round(wins / n * 100, 1), "avg_pnl": round(total_pnl / n, 1),
-            "cum_pnl": cum, "combos": combos,
+            "cum_pnl": cum, "cum_ts": cum_ts, "combos": combos,
             "entry_buckets": entry_buckets, "time_buckets": time_buckets,
         }
 

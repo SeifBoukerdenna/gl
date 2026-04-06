@@ -1,0 +1,7 @@
+{
+    "_description": "Lottery fade z>3 ONLY — the single profitable LF combo (+$1064, 96% WR), tiny sizing",
+    "ARCHITECTURE": "lottery_fade",
+    "BASE_TRADE_DOLLARS": 25,
+    "MAX_SHARES": 60,
+    "ENABLED_COMBOS": ["LF_z3_120s"]
+}

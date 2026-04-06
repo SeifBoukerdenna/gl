@@ -1,0 +1,7 @@
+{
+    "_description": "Delta sniper loose v2 — wider entry 15-90c, 2c+3c gaps, no extreme combo",
+    "ARCHITECTURE": "delta_sniper",
+    "DS_MIN_ENTRY_PRICE": 0.15,
+    "DS_MAX_ENTRY_PRICE": 0.90,
+    "ENABLED_COMBOS": ["DS_2c_gap", "DS_3c_gap"]
+}

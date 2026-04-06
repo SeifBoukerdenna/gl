@@ -1,0 +1,5 @@
+{
+    "_description": "Book fade WINNER — BF_1.5x_fast only, the single best combo in the portfolio (+$2811, 63% WR, R:R 0.89)",
+    "ARCHITECTURE": "book_fade",
+    "ENABLED_COMBOS": ["BF_1.5x_fast"]
+}

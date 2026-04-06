@@ -99,7 +99,7 @@ def check_signals(state, now_s):
             continue
         if abs_z < min_z:
             continue
-        if losing_overprice < LF_MIN_LOSING_OVERPRICE:
+        if losing_overprice < getattr(engine, 'LF_MIN_LOSING_OVERPRICE', LF_MIN_LOSING_OVERPRICE):
             continue
 
         # Buy the winning side

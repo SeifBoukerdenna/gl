@@ -1,0 +1,6 @@
+{
+    "_description": "Book fade balanced — fast combos only (no confirmation delay which kills edge), delta 10bp",
+    "ARCHITECTURE": "book_fade",
+    "BF_MAX_DELTA_BPS": 10,
+    "ENABLED_COMBOS": ["BF_1.5x_fast", "BF_2x_fast", "BF_3x_snap"]
+}

@@ -1,0 +1,8 @@
+{
+    "_description": "Gamma snipe T-10s ONLY — the only profitable GS combo (GS_2c_10s, +$20 on 72 trades at 75% WR). Entry floor 30c, 150 shares max",
+    "ARCHITECTURE": "gamma_snipe",
+    "MIN_ENTRY_PRICE": 0.30,
+    "MAX_ENTRY_PRICE": 0.95,
+    "MAX_SHARES": 150,
+    "ENABLED_COMBOS": ["GS_2c_10s"]
+}

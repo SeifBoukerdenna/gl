@@ -1,0 +1,5 @@
+{
+    "_description": "Overreaction fade EXPLORE — had 0 trades last run, testing if it fires with looser thresholds",
+    "ARCHITECTURE": "overreaction_fade",
+    "ENABLED_COMBOS": ["OF_30usd_60s", "OF_50usd_60s", "OF_30usd_45s"]
+}

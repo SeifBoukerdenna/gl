@@ -89,6 +89,11 @@ def check_signals(state, now_s):
     """Micro scalp — fire when multiple weak signals align."""
     import bot.paper_trade_v2 as engine
 
+    # Read configurable params from engine (allows config JSON overrides)
+    _min_delta = getattr(engine, 'MS_MIN_DELTA_BPS', MS_MIN_DELTA_BPS)
+    _min_imb = getattr(engine, 'MS_MIN_IMBALANCE', MS_MIN_IMBALANCE)
+    _min_gap = getattr(engine, 'MS_MIN_FAIR_GAP', MS_MIN_FAIR_GAP)
+
     if not _table_loaded:
         _load_delta_table()
 
@@ -114,15 +119,15 @@ def check_signals(state, now_s):
     delta_bps = (btc_corrected - state.window_open) / state.window_open * 10000
 
     # Signal 1: BTC delta confirms direction
-    delta_up = delta_bps >= MS_MIN_DELTA_BPS
-    delta_down = delta_bps <= -MS_MIN_DELTA_BPS
+    delta_up = delta_bps >= _min_delta
+    delta_down = delta_bps <= -_min_delta
 
     # Signal 2: Book imbalance
     bid_size = sum(s for _, s in state.book.bids[:5])
     ask_size = sum(s for _, s in state.book.asks[:5])
     ratio = bid_size / ask_size if ask_size > 0 else 1.0
-    imbalance_up = ratio >= MS_MIN_IMBALANCE      # bid heavy = market leans up
-    imbalance_down = (1/ratio if ratio > 0 else 1) >= MS_MIN_IMBALANCE  # ask heavy = leans down
+    imbalance_up = ratio >= _min_imb
+    imbalance_down = (1/ratio if ratio > 0 else 1) >= _min_imb
 
     # Signal 3: Delta table fair value gap
     fair_gap_up = False
@@ -134,9 +139,9 @@ def check_signals(state, now_s):
         if fair is not None:
             yes_ask = state.book.best_ask
             no_cost = 1.0 - state.book.best_bid
-            if fair - yes_ask >= MS_MIN_FAIR_GAP:
+            if fair - yes_ask >= _min_gap:
                 fair_gap_up = True
-            if (1 - fair) - no_cost >= MS_MIN_FAIR_GAP:
+            if (1 - fair) - no_cost >= _min_gap:
                 fair_gap_down = True
 
     # Signal 4: Quick impulse (3bp in 15s from price buffer)

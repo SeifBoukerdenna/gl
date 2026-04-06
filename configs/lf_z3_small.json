@@ -1,0 +1,7 @@
+{
+    "_description": "Lottery fade z>2.5+ ONLY — proven profitable combos, SMALL sizing ($30, 80 shares max) to cap catastrophic loss at ~$30",
+    "ARCHITECTURE": "lottery_fade",
+    "BASE_TRADE_DOLLARS": 30,
+    "MAX_SHARES": 80,
+    "ENABLED_COMBOS": ["LF_z3_120s", "LF_z2.5_120s"]
+}

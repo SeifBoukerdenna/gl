@@ -1,0 +1,5 @@
+{
+    "_description": "Micro scalp 3-signal ONLY — requires 3 of 4 signals to agree. Tests if stricter confirmation fixes the MS_2sig problem",
+    "ARCHITECTURE": "micro_scalp",
+    "ENABLED_COMBOS": ["MS_3sig"]
+}

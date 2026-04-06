@@ -1,0 +1,7 @@
+{
+    "_description": "Lottery fade z>3 NORMAL sizing — $100/trade to A/B test whether z>3 filter alone makes full sizing viable (vs lf_z3_only at $25)",
+    "ARCHITECTURE": "lottery_fade",
+    "BASE_TRADE_DOLLARS": 100,
+    "MAX_SHARES": 500,
+    "ENABLED_COMBOS": ["LF_z3_120s"]
+}
