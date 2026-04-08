@@ -1,1 +1,7 @@
-{"_description": "A/B: certainty_premium all combos, NORMAL sizing $100/500sh", "ARCHITECTURE": "certainty_premium"}
+{
+    "_description": "CP \u2014 certainty premium, proven 93% WR, $200/trade",
+    "ARCHITECTURE": "certainty_premium",
+    "BASE_TRADE_DOLLARS": 200,
+    "MAX_SHARES": 400,
+    "EDGE_TABLE_FILTER": true
+}

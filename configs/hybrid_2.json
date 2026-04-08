@@ -1,0 +1,12 @@
+{
+    "_description": "Hybrid HEAVY \u2014 $400 impulse + $300 certainty, max sizing, max aggression",
+    "ARCHITECTURE": "hybrid",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 400,
+    "MAX_SHARES": 800,
+    "MAX_RISK_PCT": 0.6,
+    "STARTING_BANKROLL": 15000,
+    "HY_BASE_DOLLARS": 400,
+    "HY_CP_DOLLARS": 300,
+    "EDGE_TABLE_FILTER": true
+}

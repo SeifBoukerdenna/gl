@@ -1,0 +1,22 @@
+{
+    "_description": "Sniper STALE BOOK — 125ms book gate (was 200, too strict), 30-75c, YES-only",
+    "ARCHITECTURE": "sniper",
+    "ALLOWED_DIRECTIONS": ["YES"],
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 125,
+    "MAX_SHARES": 500,
+    "MAX_RISK_PCT": 0.50,
+    "STARTING_BANKROLL": 5000,
+    "SNP_MIN_CONVICTION": 0.35,
+    "SNP_TIER2_CONVICTION": 0.55,
+    "SNP_TIER3_CONVICTION": 0.70,
+    "SNP_BASE_DOLLARS": 125,
+    "SNP_TIER2_DOLLARS": 275,
+    "SNP_TIER3_DOLLARS": 450,
+    "SNP_MIN_SIGMA": 1.3,
+    "SNP_XP_MIN_EXCHANGES": 3,
+    "SNP_VS_MIN_RATIO": 3.0,
+    "SNP_MIN_ENTRY_PRICE": 0.30,
+    "SNP_MAX_ENTRY_PRICE": 0.75,
+    "MIN_BOOK_AGE_MS": 125
+}

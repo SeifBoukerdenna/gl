@@ -45,6 +45,140 @@ MAX_SPREAD = 0.03
 MAX_SLIPPAGE = 0.05         # reject fills > 5c worse than best price
 MAX_BOOK_AGE_MS = 500       # reject signals when book data is older than 500ms
 ONE_TRADE_PER_WINDOW = True # only one trade per architecture per window (prevents self-competition)
+ALLOWED_DIRECTIONS = None   # None = both, or ["YES"] or ["NO"] — direction filter
+MIN_BOOK_AGE_MS = 0         # minimum book age (ms) — 0 = disabled, >0 = require PM book to be at least this stale
+CHOP_GATE = False           # if True, block trades when regime is choppy (>60% alternation in last 10 windows)
+EDGE_TABLE_FILTER = False   # if True, check edge table before trading (block low-edge setups)
+_edge_table = None          # loaded at startup if EDGE_TABLE_FILTER is True
+
+
+def _load_edge_table():
+    """Load the V2 hierarchical edge table from data/edge_table.json."""
+    global _edge_table
+    table_path = Path("data/edge_table.json")
+    if not table_path.exists():
+        print("  [EDGE TABLE] Not found at {}".format(table_path))
+        return
+    import json as _json
+    with open(table_path) as f:
+        data = _json.load(f)
+    _edge_table = data
+    version = data.get("version", 1)
+    if version >= 2:
+        n1 = len(data.get("L1", {}))
+        n2 = len(data.get("L2", {}))
+        n3 = len(data.get("L3", {}))
+        print("  [EDGE TABLE] V2 loaded: L1={} L2={} L3={} cells".format(n1, n2, n3))
+    else:
+        n = len(data.get("cells", {}))
+        print("  [EDGE TABLE] V1 loaded: {} cells".format(n))
+
+
+def _edge_table_score(direction, entry_price, time_remaining):
+    """Score a trade using the hierarchical edge table.
+    Returns a sizing multiplier: 0.0 (block), 0.5 (weak), 1.0 (normal), 1.5 (strong).
+    Returns 1.0 if no table loaded."""
+    if not _edge_table or not state.window_open or state.window_open <= 0:
+        return 1.0
+    btc = state.binance_price
+    if btc is None:
+        return 1.0
+
+    btc_corrected = btc - state.offset
+    strike = state.window_open
+    delta_bps = (btc_corrected - strike) / strike * 10000
+
+    # Buckets
+    abs_d = abs(delta_bps)
+    if abs_d >= 12:
+        d_bucket = "far_above" if delta_bps > 0 else "far_below"
+    elif abs_d >= 5:
+        d_bucket = "above" if delta_bps > 0 else "below"
+    elif abs_d >= 2:
+        d_bucket = "near_above" if delta_bps > 0 else "near_below"
+    else:
+        d_bucket = "at_strike"
+
+    if time_remaining > 240: t_bucket = "240-300"
+    elif time_remaining > 180: t_bucket = "180-240"
+    elif time_remaining > 120: t_bucket = "120-180"
+    elif time_remaining > 60: t_bucket = "60-120"
+    else: t_bucket = "0-60"
+
+    # Momentum
+    mom_type = "flat"
+    if len(state.price_buffer) >= 5:
+        price_30ago = None
+        target_ts = time.time() - 30
+        for ts, px in state.price_buffer:
+            if ts >= target_ts:
+                price_30ago = px
+                break
+        if price_30ago and price_30ago > 0:
+            mom_bps = (btc - price_30ago) / price_30ago * 10000
+            if delta_bps > 0:
+                mom_type = "away" if mom_bps > 0.5 else "toward" if mom_bps < -0.5 else "flat"
+            else:
+                mom_type = "away" if mom_bps < -0.5 else "toward" if mom_bps > 0.5 else "flat"
+
+    side = "above" if delta_bps > 0 else "below"
+
+    # Hierarchical lookup: most specific level with >= 50 samples
+    version = _edge_table.get("version", 1)
+    if version < 2:
+        # V1 fallback
+        cells = _edge_table.get("cells", {})
+        key = "{}|{}".format(d_bucket, t_bucket)
+        cell = cells.get(key)
+        if not cell or cell.get("count", 0) < 30:
+            return 1.0
+        wr = cell.get("ci_lower", 0.5)
+    else:
+        # V2: cascade L3 → L2 → L1
+        k1 = "{}|{}".format(d_bucket, t_bucket)
+        k2 = "{}|{}".format(k1, mom_type)
+        k3 = "{}|{}".format(k2, side)
+
+        L1 = _edge_table.get("L1", {})
+        L2 = _edge_table.get("L2", {})
+        L3 = _edge_table.get("L3", {})
+
+        cell = None
+        if k3 in L3 and L3[k3].get("count", 0) >= 50:
+            cell = L3[k3]
+        elif k2 in L2 and L2[k2].get("count", 0) >= 50:
+            cell = L2[k2]
+        elif k1 in L1 and L1[k1].get("count", 0) >= 50:
+            cell = L1[k1]
+
+        if cell is None:
+            return 1.0
+        wr = cell.get("wr", 0.5)
+
+    # Table WR is for betting WITH the delta. Adjust for actual direction.
+    table_direction = "YES" if delta_bps > 0 else "NO"
+    if direction != table_direction:
+        wr = 1.0 - wr
+
+    # Breakeven
+    fee = entry_price * (1 - entry_price) * 0.072
+    if direction == "YES":
+        breakeven = entry_price + fee
+    else:
+        breakeven = 1.0 - (entry_price - fee)
+
+    # Edge = how much WR exceeds breakeven
+    edge = wr - breakeven
+
+    # Convert edge to sizing multiplier
+    if edge >= 0.08:
+        return 1.0   # normal edge: standard size
+    elif edge >= 0.02:
+        return 0.7   # weak edge: reduce size
+    elif edge >= 0.0:
+        return 0.5   # marginal: half size
+    else:
+        return 0.0   # negative edge: block
 STALE_BOOK_SIZING = False   # dynamic sizing: scale up when PM book is stale (more lag = more edge)
 MIN_BOOK_LEVELS = 3
 
@@ -131,6 +265,10 @@ def load_config(name):
             g[key] = val
             applied.append(key)
 
+    # Load edge table if enabled
+    if g.get("EDGE_TABLE_FILTER"):
+        _load_edge_table()
+
     if applied:
         print("Config: {} ({} overrides, arch={})".format(config_path, len(applied), arch_name))
     else:
@@ -208,11 +346,12 @@ class Combo:
     def total_trades(self):
         return len(self.trades) + self.restored_trade_count
 
-    def compute_position_size(self, entry_price):
+    def compute_position_size(self, entry_price, override_dollars=None):
         """Flat dollar sizing with hard caps. No Kelly."""
         if entry_price <= 0.01 or entry_price >= 0.99:
             return 0
-        shares_by_dollars = BASE_TRADE_DOLLARS / entry_price
+        dollars = override_dollars if override_dollars is not None else BASE_TRADE_DOLLARS
+        shares_by_dollars = dollars / entry_price
         shares_by_risk = (self.bankroll * MAX_RISK_PCT) / entry_price
         shares = min(shares_by_dollars, shares_by_risk, MAX_SHARES)
         return max(MIN_SHARES, round(shares)) if shares >= MIN_SHARES else 0
@@ -260,6 +399,7 @@ class State:
         self.pending_skips = []
         self.skip_buffer = []
         self.skip_prints_this_window = 0
+        self.recent_outcomes = deque(maxlen=10)  # last 10 window outcomes for regime detection
         self.architecture = ARCHITECTURE
         # Combos — use architecture combo_params if loaded, else default
         params = _ARCH_SPEC["combo_params"] if _ARCH_SPEC else COMBO_PARAMS
@@ -588,8 +728,29 @@ async def read_chainlink_btc():
 # ══════════════════════════════════════════════════════════════════
 # EXECUTION
 # ══════════════════════════════════════════════════════════════════
-def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_price):
+def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_price, override_dollars=None):
     book = state.book
+
+    # Direction filter — skip disallowed directions
+    if ALLOWED_DIRECTIONS and direction not in ALLOWED_DIRECTIONS:
+        return
+
+    # Chop gate — block momentum trades in real chop (>70% alternation, not just mixed)
+    if CHOP_GATE and hasattr(state, 'recent_outcomes') and len(state.recent_outcomes) >= 5:
+        outcomes = list(state.recent_outcomes)
+        alts = sum(1 for i in range(1, len(outcomes)) if outcomes[i] != outcomes[i - 1])
+        if alts / (len(outcomes) - 1) > 0.70:
+            return
+
+    # Edge table scoring — continuous sizing multiplier from historical data
+    if EDGE_TABLE_FILTER:
+        _et_score = _edge_table_score(direction, entry_price, time_remaining)
+        if _et_score <= 0.0:
+            return  # negative historical edge — block
+        if override_dollars is not None:
+            override_dollars = int(override_dollars * _et_score)
+        else:
+            override_dollars = int(BASE_TRADE_DOLLARS * _et_score) if _et_score != 1.0 else None
 
     # Check book depth is available
     if not book.bids and not book.asks:
@@ -598,6 +759,10 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
     # Book freshness gate — reject stale book data
     book_age_ms = (time.time() - book.updated_at) * 1000
     if book_age_ms > MAX_BOOK_AGE_MS:
+        return
+
+    # Book staleness gate — only trade when PM hasn't fully repriced yet
+    if MIN_BOOK_AGE_MS > 0 and book_age_ms < MIN_BOOK_AGE_MS:
         return
 
     # Chop filter — if BTC crossed the strike both ways (by 3bp+) AND we're past
@@ -614,7 +779,7 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
             if c is not combo and c.has_position_in_window(state.window_start):
                 return
 
-    trade_size = combo.compute_position_size(entry_price)
+    trade_size = combo.compute_position_size(entry_price, override_dollars)
     if trade_size <= 0:
         return
 
@@ -708,6 +873,9 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
 def settle_window(window_start, outcome, final_price=None, silent=False):
     if final_price is not None:
         state.chained_ptb = final_price
+
+    # Track outcome for regime detection (chop vs trend)
+    state.recent_outcomes.append(outcome)
 
     # Resolve pending skips for this window
     for skip in list(state.pending_skips):

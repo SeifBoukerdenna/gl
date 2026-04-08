@@ -1,0 +1,1744 @@
+{
+  "version": 2,
+  "metadata": {
+    "built_at": 1775600021.5963142,
+    "levels": [
+      "L1: delta\u00d7time",
+      "L2: +momentum",
+      "L3: +alignment"
+    ],
+    "min_samples_per_cell": 50,
+    "bayesian_prior": "10/20",
+    "L1_cells": 35,
+    "L2_cells": 98,
+    "L3_cells": 113
+  },
+  "L1": {
+    "above|240-300": {
+      "wr": 0.6114,
+      "ci_lower": 0.597,
+      "ci_upper": 0.6271,
+      "count": 2844,
+      "wins": 1741
+    },
+    "far_above|180-240": {
+      "wr": 0.8314,
+      "ci_lower": 0.8188,
+      "ci_upper": 0.853,
+      "count": 1267,
+      "wins": 1060
+    },
+    "far_above|120-180": {
+      "wr": 0.8979,
+      "ci_lower": 0.8902,
+      "ci_upper": 0.9131,
+      "count": 1831,
+      "wins": 1652
+    },
+    "far_above|60-120": {
+      "wr": 0.9469,
+      "ci_lower": 0.9429,
+      "ci_upper": 0.958,
+      "count": 2204,
+      "wins": 2096
+    },
+    "above|0-60": {
+      "wr": 0.8389,
+      "ci_lower": 0.8294,
+      "ci_upper": 0.8528,
+      "count": 2637,
+      "wins": 2219
+    },
+    "near_above|240-300": {
+      "wr": 0.5522,
+      "ci_lower": 0.5367,
+      "ci_upper": 0.5682,
+      "count": 2693,
+      "wins": 1488
+    },
+    "near_above|180-240": {
+      "wr": 0.5778,
+      "ci_lower": 0.5608,
+      "ci_upper": 0.596,
+      "count": 2121,
+      "wins": 1227
+    },
+    "above|120-180": {
+      "wr": 0.7061,
+      "ci_lower": 0.6934,
+      "ci_upper": 0.7213,
+      "count": 2862,
+      "wins": 2025
+    },
+    "above|60-120": {
+      "wr": 0.7627,
+      "ci_lower": 0.7511,
+      "ci_upper": 0.7776,
+      "count": 2787,
+      "wins": 2131
+    },
+    "above|180-240": {
+      "wr": 0.6728,
+      "ci_lower": 0.6598,
+      "ci_upper": 0.6879,
+      "count": 3012,
+      "wins": 2030
+    },
+    "at_strike|120-180": {
+      "wr": 0.527,
+      "ci_lower": 0.509,
+      "ci_upper": 0.5454,
+      "count": 2037,
+      "wins": 1074
+    },
+    "below|60-120": {
+      "wr": 0.8319,
+      "ci_lower": 0.821,
+      "ci_upper": 0.8486,
+      "count": 1961,
+      "wins": 1638
+    },
+    "below|0-60": {
+      "wr": 0.9063,
+      "ci_lower": 0.8993,
+      "ci_upper": 0.9208,
+      "count": 1902,
+      "wins": 1732
+    },
+    "near_below|240-300": {
+      "wr": 0.5957,
+      "ci_lower": 0.5783,
+      "ci_upper": 0.6148,
+      "count": 1954,
+      "wins": 1166
+    },
+    "at_strike|180-240": {
+      "wr": 0.5471,
+      "ci_lower": 0.5313,
+      "ci_upper": 0.5636,
+      "count": 2557,
+      "wins": 1400
+    },
+    "near_below|0-60": {
+      "wr": 0.7843,
+      "ci_lower": 0.7694,
+      "ci_upper": 0.8069,
+      "count": 1283,
+      "wins": 1012
+    },
+    "at_strike|240-300": {
+      "wr": 0.5302,
+      "ci_lower": 0.5166,
+      "ci_upper": 0.5441,
+      "count": 3558,
+      "wins": 1887
+    },
+    "near_above|60-120": {
+      "wr": 0.6239,
+      "ci_lower": 0.6056,
+      "ci_upper": 0.6449,
+      "count": 1642,
+      "wins": 1027
+    },
+    "far_above|0-60": {
+      "wr": 0.9836,
+      "ci_lower": 0.9832,
+      "ci_upper": 0.9906,
+      "count": 2473,
+      "wins": 2442
+    },
+    "below|180-240": {
+      "wr": 0.7166,
+      "ci_lower": 0.7017,
+      "ci_upper": 0.7355,
+      "count": 1914,
+      "wins": 1376
+    },
+    "at_strike|60-120": {
+      "wr": 0.509,
+      "ci_lower": 0.4901,
+      "ci_upper": 0.528,
+      "count": 1878,
+      "wins": 956
+    },
+    "near_below|120-180": {
+      "wr": 0.6676,
+      "ci_lower": 0.6494,
+      "ci_upper": 0.6896,
+      "count": 1484,
+      "wins": 994
+    },
+    "near_above|120-180": {
+      "wr": 0.5857,
+      "ci_lower": 0.5681,
+      "ci_upper": 0.6049,
+      "count": 1928,
+      "wins": 1131
+    },
+    "at_strike|0-60": {
+      "wr": 0.5795,
+      "ci_lower": 0.5607,
+      "ci_upper": 0.5998,
+      "count": 1723,
+      "wins": 1000
+    },
+    "near_below|180-240": {
+      "wr": 0.6269,
+      "ci_lower": 0.6088,
+      "ci_upper": 0.6477,
+      "count": 1666,
+      "wins": 1047
+    },
+    "far_below|60-120": {
+      "wr": 0.9584,
+      "ci_lower": 0.9556,
+      "ci_upper": 0.9706,
+      "count": 1686,
+      "wins": 1625
+    },
+    "far_below|0-60": {
+      "wr": 0.9924,
+      "ci_lower": 0.9947,
+      "ci_upper": 0.9987,
+      "count": 1946,
+      "wins": 1941
+    },
+    "near_below|60-120": {
+      "wr": 0.7266,
+      "ci_lower": 0.7098,
+      "ci_upper": 0.7491,
+      "count": 1381,
+      "wins": 1008
+    },
+    "below|120-180": {
+      "wr": 0.7712,
+      "ci_lower": 0.7582,
+      "ci_upper": 0.7889,
+      "count": 2017,
+      "wins": 1561
+    },
+    "far_below|180-240": {
+      "wr": 0.8634,
+      "ci_lower": 0.852,
+      "ci_upper": 0.889,
+      "count": 888,
+      "wins": 774
+    },
+    "far_below|120-180": {
+      "wr": 0.9172,
+      "ci_lower": 0.9106,
+      "ci_upper": 0.9345,
+      "count": 1344,
+      "wins": 1241
+    },
+    "below|240-300": {
+      "wr": 0.6689,
+      "ci_lower": 0.6499,
+      "ci_upper": 0.6924,
+      "count": 1318,
+      "wins": 885
+    },
+    "near_above|0-60": {
+      "wr": 0.645,
+      "ci_lower": 0.6269,
+      "ci_upper": 0.6662,
+      "count": 1594,
+      "wins": 1031
+    },
+    "far_above|240-300": {
+      "wr": 0.7456,
+      "ci_lower": 0.7223,
+      "ci_upper": 0.7862,
+      "count": 487,
+      "wins": 368
+    },
+    "far_below|240-300": {
+      "wr": 0.7524,
+      "ci_lower": 0.7268,
+      "ci_upper": 0.8083,
+      "count": 287,
+      "wins": 221
+    }
+  },
+  "L2": {
+    "above|240-300|away": {
+      "wr": 0.6468,
+      "ci_lower": 0.6313,
+      "ci_upper": 0.6647,
+      "count": 2214,
+      "wins": 1435
+    },
+    "far_above|180-240|flat": {
+      "wr": 0.775,
+      "ci_lower": 0.7785,
+      "ci_upper": 0.9232,
+      "count": 60,
+      "wins": 52
+    },
+    "far_above|120-180|away": {
+      "wr": 0.9103,
+      "ci_lower": 0.9031,
+      "ci_upper": 0.9288,
+      "count": 1251,
+      "wins": 1147
+    },
+    "far_above|60-120|toward": {
+      "wr": 0.9301,
+      "ci_lower": 0.9264,
+      "ci_upper": 0.9564,
+      "count": 652,
+      "wins": 615
+    },
+    "above|0-60|toward": {
+      "wr": 0.8094,
+      "ci_lower": 0.7938,
+      "ci_upper": 0.8373,
+      "count": 856,
+      "wins": 699
+    },
+    "near_above|240-300|away": {
+      "wr": 0.6011,
+      "ci_lower": 0.5832,
+      "ci_upper": 0.6209,
+      "count": 1825,
+      "wins": 1099
+    },
+    "near_above|180-240|toward": {
+      "wr": 0.5215,
+      "ci_lower": 0.4905,
+      "ci_upper": 0.5535,
+      "count": 678,
+      "wins": 354
+    },
+    "above|120-180|away": {
+      "wr": 0.7442,
+      "ci_lower": 0.7288,
+      "ci_upper": 0.7649,
+      "count": 1563,
+      "wins": 1168
+    },
+    "above|60-120|away": {
+      "wr": 0.7674,
+      "ci_lower": 0.7523,
+      "ci_upper": 0.789,
+      "count": 1416,
+      "wins": 1092
+    },
+    "above|0-60|away": {
+      "wr": 0.869,
+      "ci_lower": 0.8587,
+      "ci_upper": 0.8896,
+      "count": 1240,
+      "wins": 1085
+    },
+    "above|180-240|toward": {
+      "wr": 0.6705,
+      "ci_lower": 0.6453,
+      "ci_upper": 0.7042,
+      "count": 681,
+      "wins": 460
+    },
+    "at_strike|120-180|toward": {
+      "wr": 0.5308,
+      "ci_lower": 0.5018,
+      "ci_upper": 0.5613,
+      "count": 758,
+      "wins": 403
+    },
+    "below|60-120|away": {
+      "wr": 0.8341,
+      "ci_lower": 0.821,
+      "ci_upper": 0.8581,
+      "count": 1059,
+      "wins": 890
+    },
+    "below|0-60|toward": {
+      "wr": 0.8894,
+      "ci_lower": 0.8803,
+      "ci_upper": 0.918,
+      "count": 685,
+      "wins": 617
+    },
+    "near_below|240-300|away": {
+      "wr": 0.5996,
+      "ci_lower": 0.5816,
+      "ci_upper": 0.6194,
+      "count": 1813,
+      "wins": 1089
+    },
+    "at_strike|180-240|toward": {
+      "wr": 0.5015,
+      "ci_lower": 0.4749,
+      "ci_upper": 0.5282,
+      "count": 951,
+      "wins": 477
+    },
+    "at_strike|120-180|away": {
+      "wr": 0.5242,
+      "ci_lower": 0.4962,
+      "ci_upper": 0.5532,
+      "count": 827,
+      "wins": 434
+    },
+    "near_below|0-60|away": {
+      "wr": 0.7901,
+      "ci_lower": 0.7712,
+      "ci_upper": 0.8273,
+      "count": 547,
+      "wins": 438
+    },
+    "at_strike|240-300|away": {
+      "wr": 0.5601,
+      "ci_lower": 0.5431,
+      "ci_upper": 0.5781,
+      "count": 2176,
+      "wins": 1220
+    },
+    "at_strike|180-240|flat": {
+      "wr": 0.5617,
+      "ci_lower": 0.5276,
+      "ci_upper": 0.5999,
+      "count": 507,
+      "wins": 286
+    },
+    "near_above|60-120|away": {
+      "wr": 0.6491,
+      "ci_lower": 0.6232,
+      "ci_upper": 0.6823,
+      "count": 701,
+      "wins": 458
+    },
+    "below|0-60|away": {
+      "wr": 0.9096,
+      "ci_lower": 0.9024,
+      "ci_upper": 0.9321,
+      "count": 920,
+      "wins": 845
+    },
+    "far_above|0-60|away": {
+      "wr": 0.9862,
+      "ci_lower": 0.9883,
+      "ci_upper": 0.9958,
+      "count": 1430,
+      "wins": 1420
+    },
+    "below|180-240|away": {
+      "wr": 0.7383,
+      "ci_lower": 0.7218,
+      "ci_upper": 0.7609,
+      "count": 1352,
+      "wins": 1003
+    },
+    "at_strike|60-120|toward": {
+      "wr": 0.496,
+      "ci_lower": 0.4656,
+      "ci_upper": 0.5262,
+      "count": 734,
+      "wins": 364
+    },
+    "above|180-240|away": {
+      "wr": 0.6922,
+      "ci_lower": 0.6763,
+      "ci_upper": 0.7117,
+      "count": 1822,
+      "wins": 1265
+    },
+    "far_above|60-120|away": {
+      "wr": 0.949,
+      "ci_lower": 0.9455,
+      "ci_upper": 0.9641,
+      "count": 1333,
+      "wins": 1274
+    },
+    "near_below|120-180|away": {
+      "wr": 0.6937,
+      "ci_lower": 0.6704,
+      "ci_upper": 0.7262,
+      "count": 731,
+      "wins": 511
+    },
+    "far_above|180-240|away": {
+      "wr": 0.8266,
+      "ci_lower": 0.8128,
+      "ci_upper": 0.8514,
+      "count": 1012,
+      "wins": 843
+    },
+    "far_above|0-60|toward": {
+      "wr": 0.967,
+      "ci_lower": 0.9689,
+      "ci_upper": 0.9861,
+      "count": 769,
+      "wins": 753
+    },
+    "near_above|120-180|away": {
+      "wr": 0.5891,
+      "ci_lower": 0.5628,
+      "ci_upper": 0.6191,
+      "count": 822,
+      "wins": 486
+    },
+    "at_strike|0-60|toward": {
+      "wr": 0.5496,
+      "ci_lower": 0.5195,
+      "ci_upper": 0.5823,
+      "count": 675,
+      "wins": 372
+    },
+    "far_above|120-180|toward": {
+      "wr": 0.8502,
+      "ci_lower": 0.8372,
+      "ci_upper": 0.891,
+      "count": 434,
+      "wins": 376
+    },
+    "near_above|60-120|toward": {
+      "wr": 0.5934,
+      "ci_lower": 0.562,
+      "ci_upper": 0.6305,
+      "count": 553,
+      "wins": 330
+    },
+    "near_below|180-240|away": {
+      "wr": 0.6451,
+      "ci_lower": 0.6221,
+      "ci_upper": 0.6734,
+      "count": 938,
+      "wins": 608
+    },
+    "near_below|120-180|toward": {
+      "wr": 0.6168,
+      "ci_lower": 0.5847,
+      "ci_upper": 0.6572,
+      "count": 481,
+      "wins": 299
+    },
+    "far_below|60-120|away": {
+      "wr": 0.9538,
+      "ci_lower": 0.9513,
+      "ci_upper": 0.9704,
+      "count": 1105,
+      "wins": 1063
+    },
+    "far_below|0-60|flat": {
+      "wr": 0.949,
+      "ci_lower": 0.9849,
+      "ci_upper": 1.0,
+      "count": 176,
+      "wins": 176
+    },
+    "at_strike|180-240|away": {
+      "wr": 0.5782,
+      "ci_lower": 0.555,
+      "ci_upper": 0.6039,
+      "count": 1099,
+      "wins": 637
+    },
+    "near_below|60-120|toward": {
+      "wr": 0.6808,
+      "ci_lower": 0.6525,
+      "ci_upper": 0.7222,
+      "count": 475,
+      "wins": 327
+    },
+    "below|180-240|flat": {
+      "wr": 0.6488,
+      "ci_lower": 0.6058,
+      "ci_upper": 0.7192,
+      "count": 185,
+      "wins": 123
+    },
+    "below|120-180|away": {
+      "wr": 0.7721,
+      "ci_lower": 0.7563,
+      "ci_upper": 0.7958,
+      "count": 1200,
+      "wins": 932
+    },
+    "far_below|0-60|away": {
+      "wr": 0.9881,
+      "ci_lower": 0.9923,
+      "ci_upper": 0.9985,
+      "count": 1161,
+      "wins": 1157
+    },
+    "far_below|180-240|away": {
+      "wr": 0.8628,
+      "ci_lower": 0.8511,
+      "ci_upper": 0.8917,
+      "count": 731,
+      "wins": 638
+    },
+    "far_below|120-180|toward": {
+      "wr": 0.9075,
+      "ci_lower": 0.9063,
+      "ci_upper": 0.953,
+      "count": 315,
+      "wins": 294
+    },
+    "at_strike|60-120|away": {
+      "wr": 0.5377,
+      "ci_lower": 0.5089,
+      "ci_upper": 0.5682,
+      "count": 763,
+      "wins": 411
+    },
+    "above|180-240|flat": {
+      "wr": 0.5955,
+      "ci_lower": 0.563,
+      "ci_upper": 0.6343,
+      "count": 509,
+      "wins": 305
+    },
+    "far_below|0-60|toward": {
+      "wr": 0.9825,
+      "ci_lower": 0.9927,
+      "ci_upper": 0.9996,
+      "count": 609,
+      "wins": 608
+    },
+    "far_above|0-60|flat": {
+      "wr": 0.949,
+      "ci_lower": 0.963,
+      "ci_upper": 0.9911,
+      "count": 274,
+      "wins": 269
+    },
+    "below|240-300|away": {
+      "wr": 0.6682,
+      "ci_lower": 0.6491,
+      "ci_upper": 0.6917,
+      "count": 1312,
+      "wins": 880
+    },
+    "above|60-120|toward": {
+      "wr": 0.7598,
+      "ci_lower": 0.741,
+      "ci_upper": 0.7895,
+      "count": 821,
+      "wins": 629
+    },
+    "below|120-180|flat": {
+      "wr": 0.7721,
+      "ci_lower": 0.7487,
+      "ci_upper": 0.8324,
+      "count": 252,
+      "wins": 200
+    },
+    "below|60-120|toward": {
+      "wr": 0.8148,
+      "ci_lower": 0.7985,
+      "ci_upper": 0.8484,
+      "count": 628,
+      "wins": 518
+    },
+    "below|120-180|toward": {
+      "wr": 0.7504,
+      "ci_lower": 0.7285,
+      "ci_upper": 0.7876,
+      "count": 565,
+      "wins": 429
+    },
+    "near_above|180-240|away": {
+      "wr": 0.5988,
+      "ci_lower": 0.5752,
+      "ci_upper": 0.6258,
+      "count": 1012,
+      "wins": 608
+    },
+    "near_above|120-180|toward": {
+      "wr": 0.557,
+      "ci_lower": 0.5269,
+      "ci_upper": 0.5901,
+      "count": 664,
+      "wins": 371
+    },
+    "near_below|60-120|away": {
+      "wr": 0.7485,
+      "ci_lower": 0.7272,
+      "ci_upper": 0.7833,
+      "count": 632,
+      "wins": 478
+    },
+    "near_below|60-120|flat": {
+      "wr": 0.7245,
+      "ci_lower": 0.6951,
+      "ci_upper": 0.7819,
+      "count": 274,
+      "wins": 203
+    },
+    "below|60-120|flat": {
+      "wr": 0.8163,
+      "ci_lower": 0.7996,
+      "ci_upper": 0.8726,
+      "count": 274,
+      "wins": 230
+    },
+    "near_below|180-240|toward": {
+      "wr": 0.5903,
+      "ci_lower": 0.5565,
+      "ci_upper": 0.6306,
+      "count": 473,
+      "wins": 281
+    },
+    "near_below|0-60|toward": {
+      "wr": 0.7556,
+      "ci_lower": 0.7329,
+      "ci_upper": 0.7972,
+      "count": 467,
+      "wins": 358
+    },
+    "near_below|120-180|flat": {
+      "wr": 0.6644,
+      "ci_lower": 0.6283,
+      "ci_upper": 0.7212,
+      "count": 272,
+      "wins": 184
+    },
+    "at_strike|0-60|away": {
+      "wr": 0.6246,
+      "ci_lower": 0.5973,
+      "ci_upper": 0.6583,
+      "count": 678,
+      "wins": 426
+    },
+    "near_above|60-120|flat": {
+      "wr": 0.6103,
+      "ci_lower": 0.5747,
+      "ci_upper": 0.6557,
+      "count": 388,
+      "wins": 239
+    },
+    "near_above|120-180|flat": {
+      "wr": 0.6147,
+      "ci_lower": 0.5813,
+      "ci_upper": 0.6571,
+      "count": 442,
+      "wins": 274
+    },
+    "above|120-180|toward": {
+      "wr": 0.6431,
+      "ci_lower": 0.6185,
+      "ci_upper": 0.6739,
+      "count": 801,
+      "wins": 518
+    },
+    "far_below|120-180|away": {
+      "wr": 0.9084,
+      "ci_lower": 0.9011,
+      "ci_upper": 0.9307,
+      "count": 941,
+      "wins": 863
+    },
+    "above|120-180|flat": {
+      "wr": 0.6737,
+      "ci_lower": 0.6455,
+      "ci_upper": 0.714,
+      "count": 498,
+      "wins": 339
+    },
+    "near_above|0-60|toward": {
+      "wr": 0.6136,
+      "ci_lower": 0.5836,
+      "ci_upper": 0.6504,
+      "count": 570,
+      "wins": 352
+    },
+    "near_above|180-240|flat": {
+      "wr": 0.6098,
+      "ci_lower": 0.5757,
+      "ci_upper": 0.6526,
+      "count": 431,
+      "wins": 265
+    },
+    "below|0-60|flat": {
+      "wr": 0.8833,
+      "ci_lower": 0.8778,
+      "ci_upper": 0.933,
+      "count": 297,
+      "wins": 270
+    },
+    "far_above|60-120|flat": {
+      "wr": 0.9079,
+      "ci_lower": 0.914,
+      "ci_upper": 0.9655,
+      "count": 219,
+      "wins": 207
+    },
+    "far_above|240-300|away": {
+      "wr": 0.744,
+      "ci_lower": 0.7206,
+      "ci_upper": 0.7849,
+      "count": 484,
+      "wins": 365
+    },
+    "above|0-60|flat": {
+      "wr": 0.7932,
+      "ci_lower": 0.7745,
+      "ci_upper": 0.8306,
+      "count": 541,
+      "wins": 435
+    },
+    "near_above|0-60|flat": {
+      "wr": 0.6272,
+      "ci_lower": 0.5923,
+      "ci_upper": 0.6737,
+      "count": 377,
+      "wins": 239
+    },
+    "at_strike|240-300|flat": {
+      "wr": 0.5189,
+      "ci_lower": 0.4882,
+      "ci_upper": 0.5505,
+      "count": 695,
+      "wins": 361
+    },
+    "near_above|0-60|away": {
+      "wr": 0.6747,
+      "ci_lower": 0.6492,
+      "ci_upper": 0.7094,
+      "count": 647,
+      "wins": 440
+    },
+    "near_below|0-60|flat": {
+      "wr": 0.782,
+      "ci_lower": 0.7601,
+      "ci_upper": 0.8398,
+      "count": 269,
+      "wins": 216
+    },
+    "below|180-240|toward": {
+      "wr": 0.6549,
+      "ci_lower": 0.6221,
+      "ci_upper": 0.7019,
+      "count": 377,
+      "wins": 250
+    },
+    "at_strike|60-120|flat": {
+      "wr": 0.4763,
+      "ci_lower": 0.4333,
+      "ci_upper": 0.5172,
+      "count": 381,
+      "wins": 181
+    },
+    "above|60-120|flat": {
+      "wr": 0.7368,
+      "ci_lower": 0.7137,
+      "ci_upper": 0.7748,
+      "count": 550,
+      "wins": 410
+    },
+    "far_below|240-300|away": {
+      "wr": 0.7524,
+      "ci_lower": 0.7268,
+      "ci_upper": 0.8083,
+      "count": 287,
+      "wins": 221
+    },
+    "far_below|180-240|toward": {
+      "wr": 0.8239,
+      "ci_lower": 0.8198,
+      "ci_upper": 0.9179,
+      "count": 122,
+      "wins": 107
+    },
+    "at_strike|120-180|flat": {
+      "wr": 0.5233,
+      "ci_lower": 0.4857,
+      "ci_upper": 0.5627,
+      "count": 452,
+      "wins": 237
+    },
+    "far_below|60-120|toward": {
+      "wr": 0.9505,
+      "ci_lower": 0.9539,
+      "ci_upper": 0.9805,
+      "count": 465,
+      "wins": 451
+    },
+    "far_above|180-240|toward": {
+      "wr": 0.814,
+      "ci_lower": 0.7989,
+      "ci_upper": 0.8839,
+      "count": 195,
+      "wins": 165
+    },
+    "far_below|120-180|flat": {
+      "wr": 0.8704,
+      "ci_lower": 0.9025,
+      "ci_upper": 0.9794,
+      "count": 88,
+      "wins": 84
+    },
+    "far_below|60-120|flat": {
+      "wr": 0.8897,
+      "ci_lower": 0.9141,
+      "ci_upper": 0.9789,
+      "count": 116,
+      "wins": 111
+    },
+    "near_below|180-240|flat": {
+      "wr": 0.6109,
+      "ci_lower": 0.5686,
+      "ci_upper": 0.6681,
+      "count": 255,
+      "wins": 158
+    },
+    "at_strike|0-60|flat": {
+      "wr": 0.5436,
+      "ci_lower": 0.5032,
+      "ci_upper": 0.588,
+      "count": 370,
+      "wins": 202
+    },
+    "far_above|120-180|flat": {
+      "wr": 0.8373,
+      "ci_lower": 0.8328,
+      "ci_upper": 0.9204,
+      "count": 146,
+      "wins": 129
+    },
+    "near_above|240-300|toward": {
+      "wr": 0.3876,
+      "ci_lower": 0.3455,
+      "ci_upper": 0.421,
+      "count": 447,
+      "wins": 171
+    },
+    "above|240-300|flat": {
+      "wr": 0.5746,
+      "ci_lower": 0.5319,
+      "ci_upper": 0.626,
+      "count": 295,
+      "wins": 171
+    },
+    "near_above|240-300|flat": {
+      "wr": 0.517,
+      "ci_lower": 0.4778,
+      "ci_upper": 0.5576,
+      "count": 421,
+      "wins": 218
+    },
+    "at_strike|240-300|toward": {
+      "wr": 0.447,
+      "ci_lower": 0.4145,
+      "ci_upper": 0.4768,
+      "count": 687,
+      "wins": 306
+    },
+    "above|240-300|toward": {
+      "wr": 0.4085,
+      "ci_lower": 0.3598,
+      "ci_upper": 0.4477,
+      "count": 335,
+      "wins": 135
+    },
+    "near_below|240-300|toward": {
+      "wr": 0.4935,
+      "ci_lower": 0.3852,
+      "ci_upper": 0.5981,
+      "count": 57,
+      "wins": 28
+    },
+    "near_below|240-300|flat": {
+      "wr": 0.5673,
+      "ci_lower": 0.4936,
+      "ci_upper": 0.6679,
+      "count": 84,
+      "wins": 49
+    }
+  },
+  "L3": {
+    "above|240-300|away|above": {
+      "wr": 0.6468,
+      "ci_lower": 0.6313,
+      "ci_upper": 0.6647,
+      "count": 2214,
+      "wins": 1435
+    },
+    "far_above|180-240|flat|above": {
+      "wr": 0.775,
+      "ci_lower": 0.7785,
+      "ci_upper": 0.9232,
+      "count": 60,
+      "wins": 52
+    },
+    "far_above|120-180|away|above": {
+      "wr": 0.9103,
+      "ci_lower": 0.9031,
+      "ci_upper": 0.9288,
+      "count": 1251,
+      "wins": 1147
+    },
+    "far_above|60-120|toward|above": {
+      "wr": 0.9301,
+      "ci_lower": 0.9264,
+      "ci_upper": 0.9564,
+      "count": 652,
+      "wins": 615
+    },
+    "above|0-60|toward|above": {
+      "wr": 0.8094,
+      "ci_lower": 0.7938,
+      "ci_upper": 0.8373,
+      "count": 856,
+      "wins": 699
+    },
+    "near_above|240-300|away|above": {
+      "wr": 0.6011,
+      "ci_lower": 0.5832,
+      "ci_upper": 0.6209,
+      "count": 1825,
+      "wins": 1099
+    },
+    "near_above|180-240|toward|above": {
+      "wr": 0.5215,
+      "ci_lower": 0.4905,
+      "ci_upper": 0.5535,
+      "count": 678,
+      "wins": 354
+    },
+    "above|120-180|away|above": {
+      "wr": 0.7442,
+      "ci_lower": 0.7288,
+      "ci_upper": 0.7649,
+      "count": 1563,
+      "wins": 1168
+    },
+    "above|60-120|away|above": {
+      "wr": 0.7674,
+      "ci_lower": 0.7523,
+      "ci_upper": 0.789,
+      "count": 1416,
+      "wins": 1092
+    },
+    "above|0-60|away|above": {
+      "wr": 0.869,
+      "ci_lower": 0.8587,
+      "ci_upper": 0.8896,
+      "count": 1240,
+      "wins": 1085
+    },
+    "above|180-240|toward|above": {
+      "wr": 0.6705,
+      "ci_lower": 0.6453,
+      "ci_upper": 0.7042,
+      "count": 681,
+      "wins": 460
+    },
+    "at_strike|120-180|toward|above": {
+      "wr": 0.5,
+      "ci_lower": 0.4592,
+      "ci_upper": 0.5408,
+      "count": 404,
+      "wins": 202
+    },
+    "below|60-120|away|below": {
+      "wr": 0.8341,
+      "ci_lower": 0.821,
+      "ci_upper": 0.8581,
+      "count": 1059,
+      "wins": 890
+    },
+    "below|0-60|toward|below": {
+      "wr": 0.8894,
+      "ci_lower": 0.8803,
+      "ci_upper": 0.918,
+      "count": 685,
+      "wins": 617
+    },
+    "near_below|240-300|away|below": {
+      "wr": 0.5996,
+      "ci_lower": 0.5816,
+      "ci_upper": 0.6194,
+      "count": 1813,
+      "wins": 1089
+    },
+    "at_strike|180-240|toward|above": {
+      "wr": 0.4603,
+      "ci_lower": 0.4231,
+      "ci_upper": 0.4948,
+      "count": 521,
+      "wins": 239
+    },
+    "at_strike|120-180|away|above": {
+      "wr": 0.5034,
+      "ci_lower": 0.4638,
+      "ci_upper": 0.5432,
+      "count": 427,
+      "wins": 215
+    },
+    "near_below|0-60|away|below": {
+      "wr": 0.7901,
+      "ci_lower": 0.7712,
+      "ci_upper": 0.8273,
+      "count": 547,
+      "wins": 438
+    },
+    "at_strike|240-300|away|above": {
+      "wr": 0.5609,
+      "ci_lower": 0.5364,
+      "ci_upper": 0.5874,
+      "count": 1023,
+      "wins": 575
+    },
+    "at_strike|180-240|flat|above": {
+      "wr": 0.5102,
+      "ci_lower": 0.4614,
+      "ci_upper": 0.5603,
+      "count": 274,
+      "wins": 140
+    },
+    "near_above|60-120|away|above": {
+      "wr": 0.6491,
+      "ci_lower": 0.6232,
+      "ci_upper": 0.6823,
+      "count": 701,
+      "wins": 458
+    },
+    "below|0-60|away|below": {
+      "wr": 0.9096,
+      "ci_lower": 0.9024,
+      "ci_upper": 0.9321,
+      "count": 920,
+      "wins": 845
+    },
+    "far_above|0-60|away|above": {
+      "wr": 0.9862,
+      "ci_lower": 0.9883,
+      "ci_upper": 0.9958,
+      "count": 1430,
+      "wins": 1420
+    },
+    "below|180-240|away|below": {
+      "wr": 0.7383,
+      "ci_lower": 0.7218,
+      "ci_upper": 0.7609,
+      "count": 1352,
+      "wins": 1003
+    },
+    "at_strike|60-120|toward|below": {
+      "wr": 0.5556,
+      "ci_lower": 0.5152,
+      "ci_upper": 0.6012,
+      "count": 358,
+      "wins": 200
+    },
+    "above|180-240|away|above": {
+      "wr": 0.6922,
+      "ci_lower": 0.6763,
+      "ci_upper": 0.7117,
+      "count": 1822,
+      "wins": 1265
+    },
+    "far_above|60-120|away|above": {
+      "wr": 0.949,
+      "ci_lower": 0.9455,
+      "ci_upper": 0.9641,
+      "count": 1333,
+      "wins": 1274
+    },
+    "at_strike|240-300|away|below": {
+      "wr": 0.5584,
+      "ci_lower": 0.5352,
+      "ci_upper": 0.5833,
+      "count": 1153,
+      "wins": 645
+    },
+    "at_strike|180-240|toward|below": {
+      "wr": 0.5511,
+      "ci_lower": 0.5138,
+      "ci_upper": 0.5925,
+      "count": 430,
+      "wins": 238
+    },
+    "near_below|120-180|away|below": {
+      "wr": 0.6937,
+      "ci_lower": 0.6704,
+      "ci_upper": 0.7262,
+      "count": 731,
+      "wins": 511
+    },
+    "far_above|180-240|away|above": {
+      "wr": 0.8266,
+      "ci_lower": 0.8128,
+      "ci_upper": 0.8514,
+      "count": 1012,
+      "wins": 843
+    },
+    "far_above|0-60|toward|above": {
+      "wr": 0.967,
+      "ci_lower": 0.9689,
+      "ci_upper": 0.9861,
+      "count": 769,
+      "wins": 753
+    },
+    "near_above|120-180|away|above": {
+      "wr": 0.5891,
+      "ci_lower": 0.5628,
+      "ci_upper": 0.6191,
+      "count": 822,
+      "wins": 486
+    },
+    "at_strike|60-120|toward|above": {
+      "wr": 0.4394,
+      "ci_lower": 0.3947,
+      "ci_upper": 0.4785,
+      "count": 376,
+      "wins": 164
+    },
+    "at_strike|0-60|toward|above": {
+      "wr": 0.4648,
+      "ci_lower": 0.4202,
+      "ci_upper": 0.506,
+      "count": 363,
+      "wins": 168
+    },
+    "far_above|120-180|toward|above": {
+      "wr": 0.8502,
+      "ci_lower": 0.8372,
+      "ci_upper": 0.891,
+      "count": 434,
+      "wins": 376
+    },
+    "near_above|60-120|toward|above": {
+      "wr": 0.5934,
+      "ci_lower": 0.562,
+      "ci_upper": 0.6305,
+      "count": 553,
+      "wins": 330
+    },
+    "near_below|180-240|away|below": {
+      "wr": 0.6451,
+      "ci_lower": 0.6221,
+      "ci_upper": 0.6734,
+      "count": 938,
+      "wins": 608
+    },
+    "near_below|120-180|toward|below": {
+      "wr": 0.6168,
+      "ci_lower": 0.5847,
+      "ci_upper": 0.6572,
+      "count": 481,
+      "wins": 299
+    },
+    "far_below|60-120|away|below": {
+      "wr": 0.9538,
+      "ci_lower": 0.9513,
+      "ci_upper": 0.9704,
+      "count": 1105,
+      "wins": 1063
+    },
+    "far_below|0-60|flat|below": {
+      "wr": 0.949,
+      "ci_lower": 0.9849,
+      "ci_upper": 1.0,
+      "count": 176,
+      "wins": 176
+    },
+    "at_strike|180-240|away|below": {
+      "wr": 0.5964,
+      "ci_lower": 0.566,
+      "ci_upper": 0.6324,
+      "count": 587,
+      "wins": 352
+    },
+    "near_below|60-120|toward|below": {
+      "wr": 0.6808,
+      "ci_lower": 0.6525,
+      "ci_upper": 0.7222,
+      "count": 475,
+      "wins": 327
+    },
+    "below|180-240|flat|below": {
+      "wr": 0.6488,
+      "ci_lower": 0.6058,
+      "ci_upper": 0.7192,
+      "count": 185,
+      "wins": 123
+    },
+    "below|120-180|away|below": {
+      "wr": 0.7721,
+      "ci_lower": 0.7563,
+      "ci_upper": 0.7958,
+      "count": 1200,
+      "wins": 932
+    },
+    "far_below|0-60|away|below": {
+      "wr": 0.9881,
+      "ci_lower": 0.9923,
+      "ci_upper": 0.9985,
+      "count": 1161,
+      "wins": 1157
+    },
+    "far_below|180-240|away|below": {
+      "wr": 0.8628,
+      "ci_lower": 0.8511,
+      "ci_upper": 0.8917,
+      "count": 731,
+      "wins": 638
+    },
+    "far_below|120-180|toward|below": {
+      "wr": 0.9075,
+      "ci_lower": 0.9063,
+      "ci_upper": 0.953,
+      "count": 315,
+      "wins": 294
+    },
+    "at_strike|180-240|away|above": {
+      "wr": 0.5545,
+      "ci_lower": 0.5203,
+      "ci_upper": 0.5924,
+      "count": 512,
+      "wins": 285
+    },
+    "at_strike|60-120|away|below": {
+      "wr": 0.5884,
+      "ci_lower": 0.5501,
+      "ci_upper": 0.6351,
+      "count": 359,
+      "wins": 213
+    },
+    "above|180-240|flat|above": {
+      "wr": 0.5955,
+      "ci_lower": 0.563,
+      "ci_upper": 0.6343,
+      "count": 509,
+      "wins": 305
+    },
+    "far_below|0-60|toward|below": {
+      "wr": 0.9825,
+      "ci_lower": 0.9927,
+      "ci_upper": 0.9996,
+      "count": 609,
+      "wins": 608
+    },
+    "far_above|0-60|flat|above": {
+      "wr": 0.949,
+      "ci_lower": 0.963,
+      "ci_upper": 0.9911,
+      "count": 274,
+      "wins": 269
+    },
+    "below|240-300|away|below": {
+      "wr": 0.6682,
+      "ci_lower": 0.6491,
+      "ci_upper": 0.6917,
+      "count": 1312,
+      "wins": 880
+    },
+    "above|60-120|toward|above": {
+      "wr": 0.7598,
+      "ci_lower": 0.741,
+      "ci_upper": 0.7895,
+      "count": 821,
+      "wins": 629
+    },
+    "below|120-180|flat|below": {
+      "wr": 0.7721,
+      "ci_lower": 0.7487,
+      "ci_upper": 0.8324,
+      "count": 252,
+      "wins": 200
+    },
+    "below|60-120|toward|below": {
+      "wr": 0.8148,
+      "ci_lower": 0.7985,
+      "ci_upper": 0.8484,
+      "count": 628,
+      "wins": 518
+    },
+    "below|120-180|toward|below": {
+      "wr": 0.7504,
+      "ci_lower": 0.7285,
+      "ci_upper": 0.7876,
+      "count": 565,
+      "wins": 429
+    },
+    "near_above|180-240|away|above": {
+      "wr": 0.5988,
+      "ci_lower": 0.5752,
+      "ci_upper": 0.6258,
+      "count": 1012,
+      "wins": 608
+    },
+    "near_above|120-180|toward|above": {
+      "wr": 0.557,
+      "ci_lower": 0.5269,
+      "ci_upper": 0.5901,
+      "count": 664,
+      "wins": 371
+    },
+    "at_strike|0-60|toward|below": {
+      "wr": 0.6446,
+      "ci_lower": 0.6084,
+      "ci_upper": 0.6967,
+      "count": 312,
+      "wins": 204
+    },
+    "near_below|60-120|away|below": {
+      "wr": 0.7485,
+      "ci_lower": 0.7272,
+      "ci_upper": 0.7833,
+      "count": 632,
+      "wins": 478
+    },
+    "near_below|60-120|flat|below": {
+      "wr": 0.7245,
+      "ci_lower": 0.6951,
+      "ci_upper": 0.7819,
+      "count": 274,
+      "wins": 203
+    },
+    "below|60-120|flat|below": {
+      "wr": 0.8163,
+      "ci_lower": 0.7996,
+      "ci_upper": 0.8726,
+      "count": 274,
+      "wins": 230
+    },
+    "near_below|180-240|toward|below": {
+      "wr": 0.5903,
+      "ci_lower": 0.5565,
+      "ci_upper": 0.6306,
+      "count": 473,
+      "wins": 281
+    },
+    "near_below|0-60|toward|below": {
+      "wr": 0.7556,
+      "ci_lower": 0.7329,
+      "ci_upper": 0.7972,
+      "count": 467,
+      "wins": 358
+    },
+    "near_below|120-180|flat|below": {
+      "wr": 0.6644,
+      "ci_lower": 0.6283,
+      "ci_upper": 0.7212,
+      "count": 272,
+      "wins": 184
+    },
+    "at_strike|0-60|away|below": {
+      "wr": 0.6927,
+      "ci_lower": 0.6618,
+      "ci_upper": 0.7432,
+      "count": 338,
+      "wins": 238
+    },
+    "near_above|60-120|flat|above": {
+      "wr": 0.6103,
+      "ci_lower": 0.5747,
+      "ci_upper": 0.6557,
+      "count": 388,
+      "wins": 239
+    },
+    "near_above|120-180|flat|above": {
+      "wr": 0.6147,
+      "ci_lower": 0.5813,
+      "ci_upper": 0.6571,
+      "count": 442,
+      "wins": 274
+    },
+    "above|120-180|toward|above": {
+      "wr": 0.6431,
+      "ci_lower": 0.6185,
+      "ci_upper": 0.6739,
+      "count": 801,
+      "wins": 518
+    },
+    "at_strike|180-240|flat|below": {
+      "wr": 0.6166,
+      "ci_lower": 0.5733,
+      "ci_upper": 0.677,
+      "count": 233,
+      "wins": 146
+    },
+    "far_below|120-180|away|below": {
+      "wr": 0.9084,
+      "ci_lower": 0.9011,
+      "ci_upper": 0.9307,
+      "count": 941,
+      "wins": 863
+    },
+    "above|120-180|flat|above": {
+      "wr": 0.6737,
+      "ci_lower": 0.6455,
+      "ci_upper": 0.714,
+      "count": 498,
+      "wins": 339
+    },
+    "near_above|0-60|toward|above": {
+      "wr": 0.6136,
+      "ci_lower": 0.5836,
+      "ci_upper": 0.6504,
+      "count": 570,
+      "wins": 352
+    },
+    "near_above|180-240|flat|above": {
+      "wr": 0.6098,
+      "ci_lower": 0.5757,
+      "ci_upper": 0.6526,
+      "count": 431,
+      "wins": 265
+    },
+    "below|0-60|flat|below": {
+      "wr": 0.8833,
+      "ci_lower": 0.8778,
+      "ci_upper": 0.933,
+      "count": 297,
+      "wins": 270
+    },
+    "far_above|60-120|flat|above": {
+      "wr": 0.9079,
+      "ci_lower": 0.914,
+      "ci_upper": 0.9655,
+      "count": 219,
+      "wins": 207
+    },
+    "far_above|240-300|away|above": {
+      "wr": 0.744,
+      "ci_lower": 0.7206,
+      "ci_upper": 0.7849,
+      "count": 484,
+      "wins": 365
+    },
+    "above|0-60|flat|above": {
+      "wr": 0.7932,
+      "ci_lower": 0.7745,
+      "ci_upper": 0.8306,
+      "count": 541,
+      "wins": 435
+    },
+    "near_above|0-60|flat|above": {
+      "wr": 0.6272,
+      "ci_lower": 0.5923,
+      "ci_upper": 0.6737,
+      "count": 377,
+      "wins": 239
+    },
+    "at_strike|240-300|flat|above": {
+      "wr": 0.5159,
+      "ci_lower": 0.4714,
+      "ci_upper": 0.5622,
+      "count": 325,
+      "wins": 168
+    },
+    "near_above|0-60|away|above": {
+      "wr": 0.6747,
+      "ci_lower": 0.6492,
+      "ci_upper": 0.7094,
+      "count": 647,
+      "wins": 440
+    },
+    "at_strike|120-180|toward|below": {
+      "wr": 0.5642,
+      "ci_lower": 0.5241,
+      "ci_upper": 0.6104,
+      "count": 354,
+      "wins": 201
+    },
+    "near_below|0-60|flat|below": {
+      "wr": 0.782,
+      "ci_lower": 0.7601,
+      "ci_upper": 0.8398,
+      "count": 269,
+      "wins": 216
+    },
+    "below|180-240|toward|below": {
+      "wr": 0.6549,
+      "ci_lower": 0.6221,
+      "ci_upper": 0.7019,
+      "count": 377,
+      "wins": 250
+    },
+    "at_strike|60-120|flat|above": {
+      "wr": 0.3963,
+      "ci_lower": 0.3306,
+      "ci_upper": 0.444,
+      "count": 197,
+      "wins": 76
+    },
+    "above|60-120|flat|above": {
+      "wr": 0.7368,
+      "ci_lower": 0.7137,
+      "ci_upper": 0.7748,
+      "count": 550,
+      "wins": 410
+    },
+    "at_strike|0-60|away|above": {
+      "wr": 0.55,
+      "ci_lower": 0.5083,
+      "ci_upper": 0.5967,
+      "count": 340,
+      "wins": 188
+    },
+    "at_strike|120-180|away|below": {
+      "wr": 0.5452,
+      "ci_lower": 0.5064,
+      "ci_upper": 0.588,
+      "count": 400,
+      "wins": 219
+    },
+    "at_strike|240-300|flat|below": {
+      "wr": 0.5205,
+      "ci_lower": 0.4789,
+      "ci_upper": 0.564,
+      "count": 370,
+      "wins": 193
+    },
+    "far_below|240-300|away|below": {
+      "wr": 0.7524,
+      "ci_lower": 0.7268,
+      "ci_upper": 0.8083,
+      "count": 287,
+      "wins": 221
+    },
+    "far_below|180-240|toward|below": {
+      "wr": 0.8239,
+      "ci_lower": 0.8198,
+      "ci_upper": 0.9179,
+      "count": 122,
+      "wins": 107
+    },
+    "at_strike|120-180|flat|above": {
+      "wr": 0.4704,
+      "ci_lower": 0.4147,
+      "ci_upper": 0.5216,
+      "count": 233,
+      "wins": 109
+    },
+    "at_strike|60-120|flat|below": {
+      "wr": 0.5637,
+      "ci_lower": 0.51,
+      "ci_upper": 0.6292,
+      "count": 184,
+      "wins": 105
+    },
+    "far_below|60-120|toward|below": {
+      "wr": 0.9505,
+      "ci_lower": 0.9539,
+      "ci_upper": 0.9805,
+      "count": 465,
+      "wins": 451
+    },
+    "far_above|180-240|toward|above": {
+      "wr": 0.814,
+      "ci_lower": 0.7989,
+      "ci_upper": 0.8839,
+      "count": 195,
+      "wins": 165
+    },
+    "far_below|120-180|flat|below": {
+      "wr": 0.8704,
+      "ci_lower": 0.9025,
+      "ci_upper": 0.9794,
+      "count": 88,
+      "wins": 84
+    },
+    "far_below|60-120|flat|below": {
+      "wr": 0.8897,
+      "ci_lower": 0.9141,
+      "ci_upper": 0.9789,
+      "count": 116,
+      "wins": 111
+    },
+    "near_below|180-240|flat|below": {
+      "wr": 0.6109,
+      "ci_lower": 0.5686,
+      "ci_upper": 0.6681,
+      "count": 255,
+      "wins": 158
+    },
+    "at_strike|60-120|away|above": {
+      "wr": 0.4906,
+      "ci_lower": 0.4494,
+      "ci_upper": 0.5309,
+      "count": 404,
+      "wins": 198
+    },
+    "at_strike|120-180|flat|below": {
+      "wr": 0.5774,
+      "ci_lower": 0.529,
+      "ci_upper": 0.6379,
+      "count": 219,
+      "wins": 128
+    },
+    "at_strike|0-60|flat|below": {
+      "wr": 0.6667,
+      "ci_lower": 0.6245,
+      "ci_upper": 0.7442,
+      "count": 160,
+      "wins": 110
+    },
+    "at_strike|0-60|flat|above": {
+      "wr": 0.4435,
+      "ci_lower": 0.3829,
+      "ci_upper": 0.4949,
+      "count": 210,
+      "wins": 92
+    },
+    "far_above|120-180|flat|above": {
+      "wr": 0.8373,
+      "ci_lower": 0.8328,
+      "ci_upper": 0.9204,
+      "count": 146,
+      "wins": 129
+    },
+    "near_above|240-300|toward|above": {
+      "wr": 0.3876,
+      "ci_lower": 0.3455,
+      "ci_upper": 0.421,
+      "count": 447,
+      "wins": 171
+    },
+    "above|240-300|flat|above": {
+      "wr": 0.5746,
+      "ci_lower": 0.5319,
+      "ci_upper": 0.626,
+      "count": 295,
+      "wins": 171
+    },
+    "near_above|240-300|flat|above": {
+      "wr": 0.517,
+      "ci_lower": 0.4778,
+      "ci_upper": 0.5576,
+      "count": 421,
+      "wins": 218
+    },
+    "at_strike|240-300|toward|above": {
+      "wr": 0.4262,
+      "ci_lower": 0.3857,
+      "ci_upper": 0.4612,
+      "count": 461,
+      "wins": 195
+    },
+    "above|240-300|toward|above": {
+      "wr": 0.4085,
+      "ci_lower": 0.3598,
+      "ci_upper": 0.4477,
+      "count": 335,
+      "wins": 135
+    },
+    "near_below|240-300|toward|below": {
+      "wr": 0.4935,
+      "ci_lower": 0.3852,
+      "ci_upper": 0.5981,
+      "count": 57,
+      "wins": 28
+    },
+    "near_below|240-300|flat|below": {
+      "wr": 0.5673,
+      "ci_lower": 0.4936,
+      "ci_upper": 0.6679,
+      "count": 84,
+      "wins": 49
+    },
+    "at_strike|240-300|toward|below": {
+      "wr": 0.4919,
+      "ci_lower": 0.4369,
+      "ci_upper": 0.5456,
+      "count": 226,
+      "wins": 111
+    }
+  }
+}

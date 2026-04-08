@@ -1,1 +1,11 @@
-{"_description": "Impulse confirmed WIDE — all 12 combos with multi-exchange confirmation, no dead zone", "ARCHITECTURE": "impulse_confirmed", "MIN_ENTRY_PRICE": 0.10, "MAX_ENTRY_PRICE": 0.90, "MAX_IMPULSE_BP": 50, "DEAD_ZONE_START": 0, "DEAD_ZONE_END": 0}
+{
+    "_description": "Impulse confirmed WIDE \u2014 all 12 combos with multi-exchange confirmation, no dead zone",
+    "ARCHITECTURE": "impulse_confirmed",
+    "MIN_ENTRY_PRICE": 0.1,
+    "MAX_ENTRY_PRICE": 0.9,
+    "MAX_IMPULSE_BP": 50,
+    "DEAD_ZONE_START": 0,
+    "DEAD_ZONE_END": 0,
+    "CHOP_GATE": false,
+    "EDGE_TABLE_FILTER": true
+}

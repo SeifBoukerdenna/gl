@@ -1,0 +1,21 @@
+{
+    "_description": "Evergreen FIXED — EV_core at 50-80c (big payout), EV_late z>2.5 only (near certain)",
+    "ARCHITECTURE": "evergreen",
+    "ALLOWED_DIRECTIONS": ["YES"],
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 200,
+    "MAX_SHARES": 500,
+    "MAX_RISK_PCT": 0.50,
+    "STARTING_BANKROLL": 10000,
+    "EV_MIN_Z": 2.0,
+    "EV_MIN_DISCOUNT": 0.01,
+    "EV_MIN_CONFIRMS": 1,
+    "EV_BASE_DOLLARS": 200,
+    "EV_Z25_DOLLARS": 350,
+    "EV_Z30_DOLLARS": 500,
+    "EV_MIN_ENTRY_PRICE": 0.50,
+    "EV_MAX_ENTRY_PRICE": 0.80,
+    "EV_LATE_MIN_Z": 2.5,
+    "EV_LATE_MAX_ENTRY": 0.92,
+    "CHOP_GATE": false
+}

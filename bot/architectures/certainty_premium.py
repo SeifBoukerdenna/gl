@@ -104,21 +104,30 @@ def check_signals(state, now_s):
             # Winner priced too low — model might be wrong
             continue
 
+        # Dynamic sizing: 1.5x when z >= 2.0
+        _dollars = None
+        if abs_z >= 2.0:
+            _dollars = int(getattr(engine, 'BASE_TRADE_DOLLARS', 100) * 1.5)
+
         # Buy the winning side
         if winning_dir == "YES":
             entry = state.book.best_ask
             if 0.01 <= entry <= 0.99:
                 bk = len(state.book.asks)
-                print("  [CP] FIRE {} YES z={:.1f} entry={:.0f}c asks={} T-{:.0f}s".format(
-                    combo.name, abs_z, entry*100, bk, time_remaining))
-                engine.execute_paper_trade(combo, "YES", abs_z, time_remaining, entry)
+                print("  [CP] FIRE {} YES z={:.1f} entry={:.0f}c asks={} ${}T-{:.0f}s".format(
+                    combo.name, abs_z, entry*100, bk,
+                    str(_dollars) + " " if _dollars else "", time_remaining))
+                engine.execute_paper_trade(combo, "YES", abs_z, time_remaining, entry,
+                                           override_dollars=_dollars)
         else:
             entry = state.book.best_bid
             if 0.01 <= entry <= 0.99:
                 bk = len(state.book.bids)
-                print("  [CP] FIRE {} NO z={:.1f} entry={:.0f}c bids={} T-{:.0f}s".format(
-                    combo.name, abs_z, entry*100, bk, time_remaining))
-                engine.execute_paper_trade(combo, "NO", abs_z, time_remaining, entry)
+                print("  [CP] FIRE {} NO z={:.1f} entry={:.0f}c bids={} ${}T-{:.0f}s".format(
+                    combo.name, abs_z, entry*100, bk,
+                    str(_dollars) + " " if _dollars else "", time_remaining))
+                engine.execute_paper_trade(combo, "NO", abs_z, time_remaining, entry,
+                                           override_dollars=_dollars)
 
 
 def on_window_start(state):

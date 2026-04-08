@@ -1,5 +1,0 @@
-{
-    "_description": "Overreaction fade LOOSE — $15+ BTC move, 1.5x overreaction",
-    "ARCHITECTURE": "overreaction_fade",
-    "ENABLED_COMBOS": ["OF_30usd_60s", "OF_50usd_60s", "OF_30usd_45s"]
-}

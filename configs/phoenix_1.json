@@ -1,0 +1,9 @@
+{
+    "_description": "Phoenix NEAR \u2014 buy losers 5-18c, BTC 1.5-5bp from strike, last 120s",
+    "ARCHITECTURE": "phoenix",
+    "BASE_TRADE_DOLLARS": 100,
+    "MAX_SHARES": 2000,
+    "PX_BASE_DOLLARS": 100,
+    "PX_MAX_TIME": 120,
+    "EDGE_TABLE_FILTER": true
+}

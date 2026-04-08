@@ -1,0 +1,1 @@
+{"_description": "Blitz HEAVY — same 3 phases, $350/trade, max volume", "ARCHITECTURE": "blitz", "ONE_TRADE_PER_WINDOW": false, "BASE_TRADE_DOLLARS": 350, "MAX_SHARES": 600, "MAX_RISK_PCT": 0.50, "STARTING_BANKROLL": 15000, "BZ_BASE_DOLLARS": 350}

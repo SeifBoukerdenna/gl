@@ -1,1 +1,0 @@
-{"_description": "Consensus — trade only when 3+ of 4 architectures agree (impulse, cross-exchange, flow cluster, certainty)", "ARCHITECTURE": "consensus", "ENABLED_COMBOS": ["CON_3of4"]}

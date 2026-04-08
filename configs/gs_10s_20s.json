@@ -1,8 +1,0 @@
-{
-    "_description": "Gamma snipe 10s+20s — testing if 20s can work with tighter sizing. Entry floor 35c",
-    "ARCHITECTURE": "gamma_snipe",
-    "MIN_ENTRY_PRICE": 0.35,
-    "MAX_ENTRY_PRICE": 0.90,
-    "MAX_SHARES": 120,
-    "ENABLED_COMBOS": ["GS_2c_10s", "GS_2c_20s"]
-}

@@ -1,0 +1,17 @@
+{
+    "_description": "Evergreen CLONE — z>2.0, duplicate of cranked EV1 for more volume",
+    "ARCHITECTURE": "evergreen",
+    "ALLOWED_DIRECTIONS": ["YES"],
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 250,
+    "MAX_SHARES": 600,
+    "MAX_RISK_PCT": 0.50,
+    "STARTING_BANKROLL": 10000,
+    "EV_MIN_Z": 2.0,
+    "EV_MIN_DISCOUNT": 0.02,
+    "EV_MIN_CONFIRMS": 1,
+    "EV_BASE_DOLLARS": 250,
+    "EV_Z25_DOLLARS": 400,
+    "EV_Z30_DOLLARS": 600,
+    "CHOP_GATE": false
+}

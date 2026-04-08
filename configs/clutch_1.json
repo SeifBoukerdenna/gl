@@ -1,0 +1,12 @@
+{
+    "_description": "Clutch \u2014 XP ($300) + CP ($200), strict 3-exchange, both dirs",
+    "ARCHITECTURE": "clutch",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 300,
+    "MAX_SHARES": 600,
+    "MAX_RISK_PCT": 0.5,
+    "STARTING_BANKROLL": 10000,
+    "CL_PRESSURE_DOLLARS": 300,
+    "CL_CERTAINTY_DOLLARS": 200,
+    "EDGE_TABLE_FILTER": true
+}

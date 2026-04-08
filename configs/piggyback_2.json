@@ -1,0 +1,1 @@
+{"_description": "Piggyback STRICT — 3 signals required (mid + depth + BTC all agree), big sizing", "ARCHITECTURE": "piggyback", "BASE_TRADE_DOLLARS": 250, "MAX_SHARES": 600, "PB_BASE_DOLLARS": 250, "PB_STRONG_DOLLARS": 400, "ENABLED_COMBOS": ["PB_3sig"]}

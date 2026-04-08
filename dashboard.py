@@ -888,7 +888,7 @@ function updateOverview() {
 }
 
 // ═══ Overview ═══
-S._ovSort='pnl'; S._ovArchSet=new Set(); S._ovDir='desc'; S._ovChartData=null; S._ovChartDirty=true; S._ovTimeAxis=false;
+S._ovSort='pnl'; S._ovArchSet=new Set(); S._ovDir='desc'; S._ovChartData=null; S._ovChartDirty=true; S._ovTimeAxis=false; S._ovTimePeriod=null;
 S._ovPrev={pnl:null,trades:null,wr:null};
 S._ovDeltaCache={};  // {key: {color, text, ts}}
 S._ovDeltaPrev={};   // {key: lastValue} — auto-tracks previous values per key
@@ -931,11 +931,30 @@ function ovSetSort(key){
     else{S._ovSort=key;S._ovDir='desc'}
     renderOverview(document.getElementById('content'));
 }
+async function ovEnsureChart(){
+    if(S._ovChartData){ovBuildCumChart();return}
+    if(S._ovChartLoading) return;
+    S._ovChartLoading=true;
+    try{S._ovChartData=await api('/api/chart-data');ovBuildCumChart()}catch(e){}
+    finally{S._ovChartLoading=false}
+}
 function ovToggleTimeAxis(){
     S._ovTimeAxis=!S._ovTimeAxis;
-    if(S._ovChartData) ovBuildCumChart();
+    ovEnsureChart();
     const btn=document.getElementById('ov-time-btn');
     if(btn) btn.textContent=S._ovTimeAxis?'Show by Trade #':'Show by Time';
+}
+function ovSetTimePeriod(p){
+    S._ovTimePeriod=(p==='null'||p===null)?null:p;
+    ovEnsureChart();
+    // Update button styles
+    const cont=document.getElementById('ov-period-btns');
+    if(cont) cont.querySelectorAll('button').forEach(btn=>{
+        const label=btn.textContent.trim();
+        const val=label==='All'?null:label.toLowerCase();
+        const active=(val===S._ovTimePeriod)||(val===null&&S._ovTimePeriod===null);
+        btn.className='btn btn-sm'+(active?' btn-blue':'');
+    });
 }
 function ovSelectPositive(){
     const ss=S.sessions;
@@ -943,15 +962,15 @@ function ovSelectPositive(){
     ss.forEach(s=>{const a=s.architecture||'impulse_lag';archPnl[a]=(archPnl[a]||0)+(s.pnl_taker||0)});
     S._ovArchSet=new Set(Object.entries(archPnl).filter(([a,p])=>p>0).map(([a])=>a));
     renderOverview(document.getElementById('content'));
-    if(S._ovChartData) setTimeout(()=>ovBuildCumChart(),50);
+    setTimeout(()=>ovEnsureChart(),50);
 }
 function ovToggleArch(arch){
     if(arch===''){S._ovArchSet.clear()}
     else if(S._ovArchSet.has(arch)){S._ovArchSet.delete(arch)}
     else{S._ovArchSet.add(arch)}
     renderOverview(document.getElementById('content'));
-    // Rebuild charts from cached data after DOM update
-    if(S._ovChartData) setTimeout(()=>ovBuildCumChart(),50);
+    // Rebuild charts from cached data after DOM update (auto-fetches if needed)
+    setTimeout(()=>ovEnsureChart(),50);
 }
 async function ovSyncChart(){
     // Pull fresh data from VPS, then rebuild charts
@@ -977,19 +996,48 @@ async function ovLoadChart(){
 function ovBuildCumChart(){
     if(!S._ovChartData) return;
     ['ov-cum-chart','ov-wr-chart'].forEach(id=>{if(chartInstances[id]){try{chartInstances[id].destroy()}catch(e){}}delete chartInstances[id]});
+    // Inject time-period buttons if not already present
+    if(!document.getElementById('ov-period-btns')){
+        const hdr=document.querySelector('#ov-charts-zone .card div[style*="flex"]');
+        if(hdr){
+            const wrap=document.createElement('div');
+            wrap.id='ov-period-btns';
+            wrap.style.cssText='display:flex;gap:3px;margin-right:8px';
+            ['1h','4h','12h','1d','All'].forEach(p=>{
+                const b=document.createElement('button');
+                b.className='btn btn-sm'+((p==='All'&&!S._ovTimePeriod)||(S._ovTimePeriod===p.toLowerCase())?' btn-blue':'');
+                b.style.cssText='font-size:9px;padding:1px 7px;min-width:28px';
+                b.textContent=p;
+                b.onclick=()=>ovSetTimePeriod(p==='All'?null:p.toLowerCase());
+                wrap.appendChild(b);
+            });
+            const btnGroup=hdr.querySelector('div[style*="gap"]');
+            if(btnGroup) btnGroup.prepend(wrap);
+            else hdr.appendChild(wrap);
+        }
+    }
     const cd=S._ovChartData.sessions||{};
     const selected=S._ovArchSet.size>0?S._ovArchSet:new Set(Object.values(cd).map(s=>s.architecture));
 
     // Collect all trades across selected sessions with timestamps
-    const allTrades=[];  // {pnl, arch, ts}
+    const allTradesRaw=[];  // {pnl, arch, ts}
     Object.entries(cd).forEach(([name,s])=>{
         const a=s.architecture||'impulse_lag';
         if(!selected.has(a)) return;
         const cum=s.cum_pnl||[];
         const ts=s.cum_ts||[];
         let prev=0;
-        cum.forEach((v,i)=>{const diff=v-prev; allTrades.push({pnl:diff,arch:a,ts:ts[i]||0}); prev=v});
+        cum.forEach((v,i)=>{const diff=v-prev; allTradesRaw.push({pnl:diff,arch:a,ts:ts[i]||0}); prev=v});
     });
+    // Time period filter
+    let allTrades=allTradesRaw;
+    if(S._ovTimePeriod){
+        const hrs={'1h':1,'4h':4,'12h':12,'1d':24}[S._ovTimePeriod]||null;
+        if(hrs){
+            const cutoff=Date.now()/1000 - hrs*3600;
+            allTrades=allTradesRaw.filter(t=>t.ts>=cutoff);
+        }
+    }
     // Sort by timestamp for time-axis mode
     if(S._ovTimeAxis) allTrades.sort((a,b)=>a.ts-b.ts);
     // Group by architecture
@@ -1197,7 +1245,7 @@ function renderOverview(el) {
           <div class="card" style="padding:16px;margin:12px 0">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
               <span class="d" style="font-size:11px">Cumulative PnL by Architecture</span>
-              <div style="display:flex;gap:6px">
+              <div style="display:flex;gap:6px;align-items:center">
                 <button class="btn btn-sm" id="ov-time-btn" style="font-size:10px;padding:2px 10px" onclick="ovToggleTimeAxis()">${S._ovTimeAxis?'Show by Trade #':'Show by Time'}</button>
                 <button class="btn btn-sm btn-blue" style="font-size:10px;padding:2px 10px" onclick="ovSyncChart()">Sync Chart</button>
               </div>
@@ -1236,6 +1284,21 @@ function renderOverview(el) {
       <div class="stat-box"><div class="stat-label">Win Rate</div><div class="stat-value ${wc(wr)}">${wr}%${dwr}</div><div class="stat-sub">${wins}W / ${tot-wins}L</div></div>
       <div class="stat-box"><div class="stat-label">Runtime</div><div class="stat-value cy">${runtimeStr}</div><div class="stat-sub">${totalWindows} windows settled</div></div>
       <div class="stat-box"><div class="stat-label">Active</div><div class="stat-value ${act>0?'g':'d'}">${act}</div><div class="stat-sub">sessions running</div></div>
+      ${(()=>{
+        const allWins=[];
+        Object.values(_sseVpsCache).forEach(d=>{(d.recent_windows||[]).forEach(w=>allWins.push(w))});
+        allWins.sort((a,b)=>(a.window_start||0)-(b.window_start||0));
+        const unique=[];const seen=new Set();
+        allWins.forEach(w=>{const k=w.window_start;if(!seen.has(k)){seen.add(k);unique.push(w.outcome)}});
+        const last10=unique.slice(-10);
+        if(last10.length<4) return '<div class="stat-box"><div class="stat-label">Regime</div><div class="stat-value d">...</div><div class="stat-sub">waiting for data</div></div>';
+        const alts=last10.slice(1).reduce((n,o,i)=>n+(o!==last10[i]?1:0),0);
+        const altRate=alts/(last10.length-1);
+        const regime=altRate>=0.70?'CHOP':altRate<=0.35?'TREND':'MIX';
+        const rc=regime==='TREND'?'g':regime==='CHOP'?'r':'cy';
+        const dots=last10.map(o=>o==='Up'?'<span style="color:#10b981">U</span>':'<span style="color:#ef4444">D</span>').join(' ');
+        return '<div class="stat-box"><div class="stat-label">Regime</div><div class="stat-value '+rc+'">'+regime+'</div><div class="stat-sub" style="font-size:10px">'+dots+' <span class="d">('+Math.round(altRate*100)+'% alt)</span></div></div>';
+      })()}
     </div>
     <div style="margin:14px 0 6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <span class="d" style="font-size:10px;margin-right:4px">FILTER</span>${archPills}

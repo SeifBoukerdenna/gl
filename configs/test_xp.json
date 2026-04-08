@@ -1,1 +1,6 @@
-{"_description": "Cross-exchange pressure — all combos, Binance+Coinbase+Bybit composite momentum", "ARCHITECTURE": "cross_pressure"}
+{
+    "_description": "Cross-exchange pressure \u2014 all combos, Binance+Coinbase+Bybit composite momentum",
+    "ARCHITECTURE": "cross_pressure",
+    "CHOP_GATE": false,
+    "EDGE_TABLE_FILTER": true
+}

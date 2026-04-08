@@ -241,9 +241,16 @@ def check_signals(state, now_s):
         if confirm_count < _min_confirm:
             continue  # not enough exchanges confirm — skip
 
-        print("  [IC] FIRE {} {} {:.1f}bp confirmed by {} [{}] T-{:.0f}s".format(
-            combo.name, direction, impulse_bps, confirm_count, "+".join(confirms), time_remaining))
-        engine.execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_price)
+        # Dynamic sizing: 1.5x when 2 exchanges confirm
+        _dollars = None
+        if confirm_count >= 2:
+            _dollars = int(getattr(engine, 'BASE_TRADE_DOLLARS', 100) * 1.5)
+
+        print("  [IC] FIRE {} {} {:.1f}bp confirmed by {} [{}] ${}T-{:.0f}s".format(
+            combo.name, direction, impulse_bps, confirm_count, "+".join(confirms),
+            str(_dollars) + " " if _dollars else "", time_remaining))
+        engine.execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_price,
+                                   override_dollars=_dollars)
 
 
 ARCH_SPEC = {

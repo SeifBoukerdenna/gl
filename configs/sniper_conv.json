@@ -1,0 +1,17 @@
+{
+    "_description": "Sniper CONVERGENCE ONLY — Phase 1 disabled, Phase 2 only (last 90s), pure printer",
+    "ARCHITECTURE": "sniper",
+    "ALLOWED_DIRECTIONS": ["YES"],
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 150,
+    "MAX_SHARES": 400,
+    "MAX_RISK_PCT": 0.50,
+    "STARTING_BANKROLL": 5000,
+    "SNP_PHASE1_END": 999,
+    "SNP_PHASE2_START": 90,
+    "SNP_BASE_DOLLARS": 150,
+    "SNP_CERT_MIN_Z": 1.5,
+    "SNP_LF_MIN_Z": 2.0,
+    "SNP_LF_MIN_OVERPRICE": 0.02,
+    "CHOP_GATE": false
+}

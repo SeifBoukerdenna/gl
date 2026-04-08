@@ -1,0 +1,21 @@
+{
+    "_description": "Sniper HEAVY — high conviction only, bigger sizing, strict book staleness",
+    "ARCHITECTURE": "sniper",
+    "ALLOWED_DIRECTIONS": ["YES"],
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 150,
+    "MAX_SHARES": 600,
+    "MAX_RISK_PCT": 0.50,
+    "STARTING_BANKROLL": 5000,
+    "SNP_MIN_CONVICTION": 0.50,
+    "SNP_TIER2_CONVICTION": 0.65,
+    "SNP_TIER3_CONVICTION": 0.80,
+    "SNP_BASE_DOLLARS": 150,
+    "SNP_TIER2_DOLLARS": 300,
+    "SNP_TIER3_DOLLARS": 500,
+    "SNP_MIN_SIGMA": 1.5,
+    "SNP_XP_MIN_EXCHANGES": 3,
+    "SNP_VS_MIN_RATIO": 3.0,
+    "SNP_VS_MIN_TICKS": 8,
+    "MIN_BOOK_AGE_MS": 150
+}

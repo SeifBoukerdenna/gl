@@ -1,0 +1,11 @@
+{
+    "_description": "Blitz \u2014 3 proven signals, 3 phases, up to 3 trades/window, $200/trade, both directions",
+    "ARCHITECTURE": "blitz",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 200,
+    "MAX_SHARES": 500,
+    "MAX_RISK_PCT": 0.4,
+    "STARTING_BANKROLL": 10000,
+    "BZ_BASE_DOLLARS": 200,
+    "EDGE_TABLE_FILTER": true
+}

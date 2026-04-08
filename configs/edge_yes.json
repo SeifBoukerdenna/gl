@@ -1,6 +1,9 @@
 {
-    "_description": "EDGE HUNTER \u2014 best learnings combined: G_3bp_10s only, dead zone ON, stale book sizing ON, tight spread, book freshness gate",
+    "_description": "Edge Hunter YES-only \u2014 proven best IL config + direction filter + book staleness gate",
     "STALE_BOOK_SIZING": true,
+    "ALLOWED_DIRECTIONS": [
+        "YES"
+    ],
     "MIN_ENTRY_PRICE": 0.3,
     "MAX_ENTRY_PRICE": 0.7,
     "MAX_IMPULSE_BP": 20,
@@ -8,9 +11,9 @@
     "DEAD_ZONE_START": 90,
     "DEAD_ZONE_END": 210,
     "MAX_BOOK_AGE_MS": 300,
+    "MIN_BOOK_AGE_MS": 100,
     "ENABLED_COMBOS": [
         "G_3bp_10s"
     ],
-    "CHOP_GATE": false,
-    "EDGE_TABLE_FILTER": true
+    "CHOP_GATE": true
 }

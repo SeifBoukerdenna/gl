@@ -1,0 +1,7 @@
+{
+    "_description": "Volume Shift PRINTER tight — 4x+ rate spike, 8+ ticks, high conviction only",
+    "ARCHITECTURE": "volume_shift",
+    "BASE_TRADE_DOLLARS": 150,
+    "MAX_SHARES": 500,
+    "ENABLED_COMBOS": ["VS_4x_8t", "VS_5x_6t"]
+}

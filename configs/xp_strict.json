@@ -1,0 +1,10 @@
+{
+    "_description": "XP STRICT \u2014 ONLY XP_3ex_5bp combo (proven +$27.9/trade, 72% WR), $250/trade",
+    "ARCHITECTURE": "cross_pressure",
+    "BASE_TRADE_DOLLARS": 250,
+    "MAX_SHARES": 500,
+    "ENABLED_COMBOS": [
+        "XP_3ex_5bp"
+    ],
+    "EDGE_TABLE_FILTER": true
+}

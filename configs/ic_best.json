@@ -1,0 +1,10 @@
+{
+    "_description": "IC BEST \u2014 ONLY A_5bp_30s combo (proven +$16.6/trade, 68% WR), $200/trade",
+    "ARCHITECTURE": "impulse_confirmed",
+    "BASE_TRADE_DOLLARS": 200,
+    "MAX_SHARES": 500,
+    "ENABLED_COMBOS": [
+        "A_5bp_30s"
+    ],
+    "EDGE_TABLE_FILTER": true
+}

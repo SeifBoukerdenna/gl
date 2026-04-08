@@ -1,0 +1,6 @@
+{
+    "_description": "Volume Shift PRINTER — both directions (VS is predictive), standard thresholds",
+    "ARCHITECTURE": "volume_shift",
+    "BASE_TRADE_DOLLARS": 100,
+    "MAX_SHARES": 500
+}

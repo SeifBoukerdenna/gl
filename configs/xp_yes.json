@@ -1,0 +1,13 @@
+{
+    "_description": "Cross-pressure YES-only \u2014 NO book staleness gate (XP edge is info, not timing)",
+    "ARCHITECTURE": "cross_pressure",
+    "ALLOWED_DIRECTIONS": [
+        "YES"
+    ],
+    "BASE_TRADE_DOLLARS": 100,
+    "MAX_SHARES": 500,
+    "CP_MIN_ENTRY_PRICE": 0.3,
+    "CP_MAX_ENTRY_PRICE": 0.85,
+    "MIN_BOOK_AGE_MS": 0,
+    "CHOP_GATE": false
+}

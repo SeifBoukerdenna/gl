@@ -1,5 +1,0 @@
-{
-    "_description": "Overreaction fade filtered — volume filter + big moves only",
-    "ARCHITECTURE": "overreaction_fade",
-    "ENABLED_COMBOS": ["OF_30usd_60s_vol", "OF_50usd_60s"]
-}

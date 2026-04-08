@@ -1,0 +1,17 @@
+{
+    "_description": "Evergreen MAX — z>2.0, 1-confirm, absolute max sizing, the big gun",
+    "ARCHITECTURE": "evergreen",
+    "ALLOWED_DIRECTIONS": ["YES"],
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 400,
+    "MAX_SHARES": 700,
+    "MAX_RISK_PCT": 0.60,
+    "STARTING_BANKROLL": 15000,
+    "EV_MIN_Z": 2.0,
+    "EV_MIN_DISCOUNT": 0.01,
+    "EV_MIN_CONFIRMS": 1,
+    "EV_BASE_DOLLARS": 400,
+    "EV_Z25_DOLLARS": 550,
+    "EV_Z30_DOLLARS": 750,
+    "CHOP_GATE": false
+}

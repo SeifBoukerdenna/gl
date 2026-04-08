@@ -1,0 +1,1 @@
+{"_description": "Lottery fade — 91% WR convergence, fires last 120s (wider window than CP), YES-only", "ARCHITECTURE": "lottery_fade", "ALLOWED_DIRECTIONS": ["YES"], "BASE_TRADE_DOLLARS": 100, "MAX_SHARES": 300, "CHOP_GATE": false}

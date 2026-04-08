@@ -1,0 +1,21 @@
+{
+    "_description": "Sniper AGGRESSIVE FIXED — book staleness gate, min 30c entry, YES-only",
+    "ARCHITECTURE": "sniper",
+    "ALLOWED_DIRECTIONS": ["YES"],
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 75,
+    "MAX_SHARES": 500,
+    "MAX_RISK_PCT": 0.50,
+    "STARTING_BANKROLL": 5000,
+    "SNP_MIN_CONVICTION": 0.30,
+    "SNP_TIER2_CONVICTION": 0.50,
+    "SNP_TIER3_CONVICTION": 0.70,
+    "SNP_BASE_DOLLARS": 75,
+    "SNP_TIER2_DOLLARS": 200,
+    "SNP_TIER3_DOLLARS": 400,
+    "SNP_MIN_SIGMA": 1.2,
+    "SNP_XP_MIN_EXCHANGES": 2,
+    "SNP_VS_MIN_RATIO": 2.5,
+    "SNP_MIN_ENTRY_PRICE": 0.30,
+    "MIN_BOOK_AGE_MS": 100
+}

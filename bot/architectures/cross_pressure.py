@@ -233,13 +233,19 @@ def check_signals(state, now_s):
         if entry < _min_entry or entry > _max_entry:
             continue
 
+        # Dynamic sizing: 1.5x when composite > 8bp
+        _dollars = None
+        if composite >= 8.0:
+            _dollars = int(getattr(engine, 'BASE_TRADE_DOLLARS', 100) * 1.5)
+
         mom_str = "+".join("{}{:+.1f}".format(k, v) for k, v in sorted(momentums.items()))
-        print("  [XP] FIRE {} {} composite={:.1f}bp exchanges={}/{} [{}] T-{:.0f}s".format(
+        print("  [XP] FIRE {} {} composite={:.1f}bp exchanges={}/{} [{}] ${}T-{:.0f}s".format(
             combo.name, direction, composite, up_count if direction == "YES" else down_count,
-            len(momentums), mom_str, time_remaining))
+            len(momentums), mom_str, str(_dollars) + " " if _dollars else "", time_remaining))
 
         _last_signal_time = now
-        engine.execute_paper_trade(combo, direction, composite, time_remaining, entry)
+        engine.execute_paper_trade(combo, direction, composite, time_remaining, entry,
+                                   override_dollars=_dollars)
         break
 
 

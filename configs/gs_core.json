@@ -1,5 +1,0 @@
-{
-    "_description": "Gamma snipe core — 2-3c gaps in last 30-60s",
-    "ARCHITECTURE": "gamma_snipe",
-    "ENABLED_COMBOS": ["GS_2c_30s", "GS_3c_45s", "GS_3c_60s", "GS_5c_60s"]
-}

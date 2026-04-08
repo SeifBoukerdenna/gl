@@ -1,0 +1,1 @@
+{"_description": "Phoenix BIGGER — $200 per flip, last 120s, wider distance allowed", "ARCHITECTURE": "phoenix", "BASE_TRADE_DOLLARS": 200, "MAX_SHARES": 3000, "PX_BASE_DOLLARS": 200, "PX_MAX_TIME": 120, "PX_MAX_DISTANCE_BPS": 6.0}

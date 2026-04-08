@@ -1,0 +1,12 @@
+{
+    "_description": "Hybrid \u2014 IC+CP merged, $250 impulse + $200 certainty, both dirs, no filters, max volume",
+    "ARCHITECTURE": "hybrid",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 250,
+    "MAX_SHARES": 600,
+    "MAX_RISK_PCT": 0.5,
+    "STARTING_BANKROLL": 10000,
+    "HY_BASE_DOLLARS": 250,
+    "HY_CP_DOLLARS": 200,
+    "EDGE_TABLE_FILTER": true
+}

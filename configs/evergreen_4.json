@@ -1,0 +1,19 @@
+{
+    "_description": "Evergreen MAX VOLUME — z>1.5, fires in MOST windows, 1-exchange confirm, constant trader",
+    "ARCHITECTURE": "evergreen",
+    "ALLOWED_DIRECTIONS": ["YES"],
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 75,
+    "MAX_SHARES": 400,
+    "MAX_RISK_PCT": 0.50,
+    "STARTING_BANKROLL": 5000,
+    "EV_MIN_Z": 1.5,
+    "EV_MIN_DISCOUNT": 0.01,
+    "EV_MIN_CONFIRMS": 1,
+    "EV_BASE_DOLLARS": 75,
+    "EV_Z25_DOLLARS": 125,
+    "EV_Z30_DOLLARS": 200,
+    "EV_LATE_MIN_Z": 1.2,
+    "EV_MIN_ENTRY_PRICE": 0.45,
+    "CHOP_GATE": false
+}
