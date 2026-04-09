@@ -1,16 +1,19 @@
 {
-    "_description": "Oracle AGRO — trades at 2pp+ edge (vs 8pp for oracle_1), MAX frequency, sizing by edge",
+    "_description": "Oracle AGRO \u2014 2pp+ edge, skip first 90s (T-210 max), sizing by edge",
     "ARCHITECTURE": "oracle",
     "ONE_TRADE_PER_WINDOW": false,
     "BASE_TRADE_DOLLARS": 150,
     "MAX_SHARES": 500,
-    "MAX_RISK_PCT": 0.50,
-    "STARTING_BANKROLL": 10000,
+    "MAX_RISK_PCT": 0.99,
+    "STARTING_BANKROLL": 999999,
     "OR_BASE_DOLLARS": 150,
     "OR_PHASE1_MIN_EDGE": 0.02,
     "OR_PHASE2_MIN_EDGE": 0.02,
     "OR_COOLDOWN_SEC": 5,
+    "OR_MAX_TIME": 210,
     "OR_MIN_ENTRY": 0.15,
     "OR_MAX_ENTRY": 0.88,
-    "EDGE_TABLE_FILTER": false
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false
 }

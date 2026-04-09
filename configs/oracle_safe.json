@@ -1,0 +1,19 @@
+{
+    "_description": "Oracle SAFE \u2014 45c max entry, 73% WR, big sizing, $1.5k bankroll",
+    "ARCHITECTURE": "oracle",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 350,
+    "MAX_SHARES": 800,
+    "MAX_RISK_PCT": 0.99,
+    "STARTING_BANKROLL": 999999,
+    "OR_BASE_DOLLARS": 350,
+    "OR_PHASE1_MIN_EDGE": 0.08,
+    "OR_PHASE2_MIN_EDGE": 0.05,
+    "OR_MAX_ENTRY": 0.45,
+    "OR_MIN_ENTRY": 0.1,
+    "OR_COOLDOWN_SEC": 10,
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false,
+    "SIGNAL_CHECK_MS": 50
+}

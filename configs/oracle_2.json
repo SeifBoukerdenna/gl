@@ -1,1 +1,16 @@
-{"_description": "Oracle AGGRESSIVE — 5pp everywhere, more trades, $250/trade", "ARCHITECTURE": "oracle", "ONE_TRADE_PER_WINDOW": false, "BASE_TRADE_DOLLARS": 250, "MAX_SHARES": 600, "OR_BASE_DOLLARS": 250, "OR_PHASE1_MIN_EDGE": 0.05, "OR_PHASE2_MIN_EDGE": 0.03, "EDGE_TABLE_FILTER": false}
+{
+    "_description": "Oracle 2 \u2014 5pp/3pp edge, skip first 90s (T-210 max), $250/trade",
+    "ARCHITECTURE": "oracle",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 250,
+    "MAX_SHARES": 600,
+    "OR_BASE_DOLLARS": 250,
+    "OR_PHASE1_MIN_EDGE": 0.05,
+    "OR_PHASE2_MIN_EDGE": 0.03,
+    "OR_MAX_TIME": 210,
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false,
+    "STARTING_BANKROLL": 999999,
+    "MAX_RISK_PCT": 0.99
+}

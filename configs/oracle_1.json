@@ -1,1 +1,12 @@
-{"_description": "Oracle — pure edge table trader, 8pp early / 5pp late, $200/trade, both dirs", "ARCHITECTURE": "oracle", "ONE_TRADE_PER_WINDOW": false, "BASE_TRADE_DOLLARS": 200, "MAX_SHARES": 500, "OR_BASE_DOLLARS": 200, "EDGE_TABLE_FILTER": false}
+{
+    "_description": "Oracle \u2014 pure edge table trader, 8pp early / 5pp late, $200/trade, both dirs",
+    "ARCHITECTURE": "oracle",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 200,
+    "MAX_SHARES": 500,
+    "OR_BASE_DOLLARS": 200,
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false,
+    "SIGNAL_CHECK_MS": 50
+}

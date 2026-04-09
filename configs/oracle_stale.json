@@ -1,16 +1,18 @@
 {
-    "_description": "Oracle STALE — book age 50-150ms sweet spot (80% WR, +$90/t in data), 8pp edge, $200",
+    "_description": "Oracle STALE \u2014 book age 50-150ms sweet spot (80% WR, +$90/t in data), 8pp edge, $200",
     "ARCHITECTURE": "oracle",
     "ONE_TRADE_PER_WINDOW": false,
     "BASE_TRADE_DOLLARS": 200,
     "MAX_SHARES": 500,
-    "MAX_RISK_PCT": 0.50,
-    "STARTING_BANKROLL": 10000,
+    "MAX_RISK_PCT": 0.99,
+    "STARTING_BANKROLL": 999999,
     "OR_BASE_DOLLARS": 200,
     "OR_PHASE1_MIN_EDGE": 0.08,
     "OR_PHASE2_MIN_EDGE": 0.05,
     "OR_COOLDOWN_SEC": 10,
     "MIN_BOOK_AGE_MS": 50,
     "MAX_BOOK_AGE_MS": 150,
-    "EDGE_TABLE_FILTER": false
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false
 }

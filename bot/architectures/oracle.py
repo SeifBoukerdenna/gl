@@ -259,6 +259,15 @@ def check_signals(state, now_s):
     else:
         dollars = int(base_dollars * 0.7)
 
+    # Vol-adjusted sizing: high vol = smaller bets, low vol = normal
+    from bot.shared.volatility import vol_tracker as _vt
+    _sigma = _vt.get_sigma()
+    if _sigma and _sigma > 0:
+        # Normal sigma ~$3/√sec. Scale down when vol is elevated.
+        # sigma 3 = 1.0x, sigma 6 = 0.5x, sigma 9 = 0.33x
+        vol_mult = min(1.0, 3.0 / _sigma)
+        dollars = max(25, int(dollars * vol_mult))
+
     print("  {}[OR] FIRE {} {} edge={:.0%} wr={:.0%} @{:.0f}c ${} {} T-{:.0f}s{}".format(
         engine.G if direction == "YES" else engine.R,
         combo_name, direction, edge, wr, entry * 100, dollars,

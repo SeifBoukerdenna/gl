@@ -48,7 +48,10 @@ ONE_TRADE_PER_WINDOW = True # only one trade per architecture per window (preven
 ALLOWED_DIRECTIONS = None   # None = both, or ["YES"] or ["NO"] — direction filter
 MIN_BOOK_AGE_MS = 0         # minimum book age (ms) — 0 = disabled, >0 = require PM book to be at least this stale
 CHOP_GATE = False           # if True, block trades when regime is choppy (>60% alternation in last 10 windows)
+CHOP_FILTER = True          # if True, block trades when BTC crossed strike both ways in current window
+LOSS_COOLDOWN = True        # if True, pause 10min after 2 consecutive all-loss windows
 EDGE_TABLE_FILTER = False   # if True, check edge table before trading (block low-edge setups)
+SIGNAL_CHECK_MS = 200       # signal check interval in ms (200=default, 50=fast)
 _edge_table = None          # loaded at startup if EDGE_TABLE_FILTER is True
 
 
@@ -525,8 +528,8 @@ async def binance_ws_loop():
                         if _ARCH_SPEC and _ARCH_SPEC.get("on_tick"):
                             _ARCH_SPEC["on_tick"](state, price, current_s)
 
-                    # Signal check every 200ms (5x/sec) — balances speed vs memory
-                    if ts_ms - getattr(state, '_last_signal_check_ms', 0) >= 200:
+                    # Signal check interval (configurable: 200ms default, 50ms fast)
+                    if ts_ms - getattr(state, '_last_signal_check_ms', 0) >= SIGNAL_CHECK_MS:
                         state._last_signal_check_ms = ts_ms
                         if _ARCH_SPEC:
                             _ARCH_SPEC["check_signals"](state, current_s)
@@ -731,8 +734,14 @@ async def read_chainlink_btc():
 def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_price, override_dollars=None):
     book = state.book
 
+    def _reject(reason):
+        """Log rejected trade (only prints, no file I/O, no disk cost)."""
+        print("  {}[REJECT] {} {} @{:.0f}c T-{:.0f}s — {}{}".format(
+            DIM, combo.name, direction, entry_price * 100, time_remaining, reason, RST))
+
     # Direction filter — skip disallowed directions
     if ALLOWED_DIRECTIONS and direction not in ALLOWED_DIRECTIONS:
+        _reject("direction {} blocked".format(direction))
         return
 
     # Chop gate — block momentum trades in real chop (>70% alternation, not just mixed)
@@ -740,13 +749,15 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
         outcomes = list(state.recent_outcomes)
         alts = sum(1 for i in range(1, len(outcomes)) if outcomes[i] != outcomes[i - 1])
         if alts / (len(outcomes) - 1) > 0.70:
+            _reject("chop gate {:.0f}% alt".format(alts / (len(outcomes) - 1) * 100))
             return
 
     # Edge table scoring — continuous sizing multiplier from historical data
     if EDGE_TABLE_FILTER:
         _et_score = _edge_table_score(direction, entry_price, time_remaining)
         if _et_score <= 0.0:
-            return  # negative historical edge — block
+            _reject("edge table score {:.2f}".format(_et_score))
+            return
         if override_dollars is not None:
             override_dollars = int(override_dollars * _et_score)
         else:
@@ -754,33 +765,39 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
 
     # Check book depth is available
     if not book.bids and not book.asks:
+        _reject("no book depth")
         return
 
     # Book freshness gate — reject stale book data
     book_age_ms = (time.time() - book.updated_at) * 1000
     if book_age_ms > MAX_BOOK_AGE_MS:
+        _reject("book too stale {:.0f}ms > {:.0f}ms".format(book_age_ms, MAX_BOOK_AGE_MS))
         return
 
     # Book staleness gate — only trade when PM hasn't fully repriced yet
     if MIN_BOOK_AGE_MS > 0 and book_age_ms < MIN_BOOK_AGE_MS:
+        _reject("book too fresh {:.0f}ms < {:.0f}ms".format(book_age_ms, MIN_BOOK_AGE_MS))
         return
 
     # Chop filter — if BTC crossed the strike both ways (by 3bp+) AND we're past
     # the first 2 minutes, the window is choppy. Skip directional bets.
     # Early crosses are OK — BTC might still trend after initial noise.
-    if state.window_crossed_above and state.window_crossed_below:
+    if CHOP_FILTER and state.window_crossed_above and state.window_crossed_below:
         elapsed = time.time() - state.window_start if state.window_start else 0
         if elapsed > 120:  # only block after 2 minutes into window
+            _reject("chop filter (crossed both ways)")
             return
 
     # One trade per architecture per window — prevents self-competition on the same book
     if ONE_TRADE_PER_WINDOW and state.window_start:
         for c in state.combos:
             if c is not combo and c.has_position_in_window(state.window_start):
+                _reject("one-trade-per-window ({} already traded)".format(c.name))
                 return
 
     trade_size = combo.compute_position_size(entry_price, override_dollars)
     if trade_size <= 0:
+        _reject("position size 0 (entry={:.2f} dollars={})".format(entry_price, override_dollars))
         return
 
     # Stale Book Sizing: scale position based on how stale PM's book is
@@ -945,7 +962,7 @@ def settle_window(window_start, outcome, final_price=None, silent=False):
             if not silent:
                 print("  {}[COOLDOWN] Range {:.0f}bp — skipping {}s{}".format(Y, rng, COOLDOWN_DURATION, RST))
 
-    if traded_this_window and all(p["result"] == "LOSS" for _, p in traded_this_window):
+    if LOSS_COOLDOWN and traded_this_window and all(p["result"] == "LOSS" for _, p in traded_this_window):
         state.consecutive_all_loss_windows += 1
         if state.consecutive_all_loss_windows >= 2:
             state.cooldown_until = time.time() + 600

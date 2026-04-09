@@ -1,11 +1,11 @@
 {
-    "_description": "Oracle MID — only T-180 to T-60 (the golden zone: 88% WR, +$89/t in data), 8pp edge, $250",
+    "_description": "Oracle MID \u2014 only T-180 to T-60 (the golden zone: 88% WR, +$89/t in data), 8pp edge, $250",
     "ARCHITECTURE": "oracle",
     "ONE_TRADE_PER_WINDOW": false,
     "BASE_TRADE_DOLLARS": 250,
     "MAX_SHARES": 500,
-    "MAX_RISK_PCT": 0.50,
-    "STARTING_BANKROLL": 10000,
+    "MAX_RISK_PCT": 0.99,
+    "STARTING_BANKROLL": 999999,
     "OR_BASE_DOLLARS": 250,
     "OR_MAX_TIME": 180,
     "OR_MIN_TIME": 60,
@@ -13,5 +13,7 @@
     "OR_PHASE1_MIN_EDGE": 0.08,
     "OR_PHASE2_MIN_EDGE": 0.05,
     "OR_COOLDOWN_SEC": 10,
-    "EDGE_TABLE_FILTER": false
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false
 }

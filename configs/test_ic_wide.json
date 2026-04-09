@@ -7,5 +7,6 @@
     "DEAD_ZONE_START": 0,
     "DEAD_ZONE_END": 0,
     "CHOP_GATE": false,
-    "EDGE_TABLE_FILTER": true
+    "EDGE_TABLE_FILTER": true,
+    "SIGNAL_CHECK_MS": 50
 }

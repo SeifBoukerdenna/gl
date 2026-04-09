@@ -1208,13 +1208,16 @@ function renderOverview(el) {
         const cls=p>0?'positive':p<0?'negative':'zero';
         const bc=w>=60?'var(--green)':w>=50?'var(--yellow)':'var(--red)';
         const avgP=s.trades>0?p/s.trades:0;
+        const dpnl=ovDeltaBadge('sc_pnl_'+s.name,p,null,d=>'$'+Math.round(d).toLocaleString());
+        const dwr=ovDeltaBadge('sc_wr_'+s.name,w,null,d=>d.toFixed(1)+'pp');
+        const dtrades=ovDeltaBadge('sc_trades_'+s.name,s.trades||0,null,d=>d.toString());
         cards += `<div class="session-card ${cls}" onclick="navigate('session','${s.name}')">
           <div class="sc-top"><div><span class="d mono" style="font-size:10px;font-weight:700">#${i+1}</span> <span class="sc-name">${s.name}</span></div>
           <div style="display:flex;align-items:center;gap:5px"><span class="sc-where">${s.architecture||'impulse_lag'}</span><span class="sc-where">${s.where}</span><div class="sc-dot ${active?'on':'off'}"></div></div></div>
           <div class="sc-stats">
-            <div><div class="sc-stat-label">PnL</div><div class="sc-stat-value ${pc(p)}">${fp(p)}</div></div>
-            <div><div class="sc-stat-label">Win Rate</div><div class="sc-stat-value ${wc(w)}">${w}%</div></div>
-            <div><div class="sc-stat-label">Trades</div><div class="sc-stat-value">${s.trades||0}</div></div>
+            <div><div class="sc-stat-label">PnL</div><div class="sc-stat-value ${pc(p)}">${fp(p)}${dpnl}</div></div>
+            <div><div class="sc-stat-label">Win Rate</div><div class="sc-stat-value ${wc(w)}">${w}%${dwr}</div></div>
+            <div><div class="sc-stat-label">Trades</div><div class="sc-stat-value">${s.trades||0}${dtrades}</div></div>
             <div><div class="sc-stat-label">$/Trade</div><div class="sc-stat-value ${pc(avgP)}">${s.trades>0?fps(avgP):'\u2014'}</div></div>
           </div>
           <div class="sc-bar"><div class="sc-bar-fill" style="width:${Math.min(100,w)}%;background:${bc}"></div></div>
@@ -1428,6 +1431,77 @@ function renderSession(el) {
     </div>
     ${pills?'<div class="section-header"><div class="section-title">Recent Windows</div></div><div style="margin-bottom:16px">'+pills+'</div>':''}
     ${comboRows?`<div class="card"><div class="card-header"><h3>Combo Performance</h3><span class="d mono" style="font-size:10px">${csvTrades} trades from CSV</span></div><div style="overflow-x:auto"><table><thead><tr><th>Combo</th><th>Trades</th><th>Wins</th><th>Win%</th><th>PnL</th><th>$/Trade</th><th style="width:80px">WR</th></tr></thead><tbody>${comboRows}</tbody></table></div></div>`:''}
+    ${(()=>{
+        // Rolling 12-window PnL progression
+        if(!csvLog.length) return '';
+        // Group trades by window_start
+        const winMap={};
+        csvLog.forEach(t=>{
+            const ws=t.window_start||'';
+            if(!ws) return;
+            if(!winMap[ws]) winMap[ws]={trades:[],combos:{}};
+            winMap[ws].trades.push(t);
+            const combo=t.combo||'combined';
+            if(!winMap[ws].combos[combo]) winMap[ws].combos[combo]={pnl:0,w:0,n:0};
+            winMap[ws].combos[combo].n++;
+            winMap[ws].combos[combo].pnl+=parseFloat(t.pnl_taker||0);
+            if(t.result==='WIN') winMap[ws].combos[combo].w++;
+        });
+        const sortedWins=Object.keys(winMap).sort((a,b)=>parseFloat(a)-parseFloat(b));
+        if(sortedWins.length<2) return '';
+        // Get all combo names
+        const allCombos=[...new Set(csvLog.map(t=>t.combo||'').filter(Boolean))].sort();
+        // Build rolling 12-window blocks
+        const blockSize=12;
+        const blocks=[];
+        for(let i=0;i<sortedWins.length;i+=blockSize){
+            const slice=sortedWins.slice(i,i+blockSize);
+            const firstTs=parseFloat(slice[0]);
+            const lastTs=parseFloat(slice[slice.length-1]);
+            const fmtEst=ts=>{const d=new Date((ts-4*3600)*1000);const m=d.getUTCMonth()+1;const dy=d.getUTCDate();const h=d.getUTCHours();const mn=d.getUTCMinutes();const ampm=h>=12?'PM':'AM';const h12=h%12||12;return m+'/'+dy+' '+h12+':'+String(mn).padStart(2,'0')+ampm};
+            const block={label:fmtEst(firstTs)+' — '+fmtEst(lastTs+300),trades:0,wins:0,pnl:0,combos:{}};
+            allCombos.forEach(c=>{block.combos[c]={pnl:0,w:0,n:0}});
+            slice.forEach(ws=>{
+                const w=winMap[ws];
+                w.trades.forEach(t=>{
+                    block.trades++;
+                    block.pnl+=parseFloat(t.pnl_taker||0);
+                    if(t.result==='WIN') block.wins++;
+                    const c=t.combo||'';
+                    if(c&&block.combos[c]){
+                        block.combos[c].n++;
+                        block.combos[c].pnl+=parseFloat(t.pnl_taker||0);
+                        if(t.result==='WIN') block.combos[c].w++;
+                    }
+                });
+            });
+            blocks.push(block);
+        }
+        if(blocks.length<2) return '';
+        // Build table
+        let hdr='<th>Block</th><th>Trades</th><th>WR</th><th>PnL</th><th>$/t</th>';
+        allCombos.forEach(c=>{hdr+='<th>'+c+'</th>'});
+        let rows='';
+        let cumPnl=0;
+        blocks.forEach(b=>{
+            cumPnl+=b.pnl;
+            const wr=b.trades>0?(b.wins/b.trades*100):0;
+            const avg=b.trades>0?b.pnl/b.trades:0;
+            const pnlCls=b.pnl>=0?'g':'r';
+            rows+='<tr><td class="b">'+b.label+'</td><td>'+b.trades+'</td><td class="'+((wr>=55)?'g':(wr>=50)?'cy':'r')+'">'+wr.toFixed(0)+'%</td><td class="'+pnlCls+'" style="font-weight:700">$'+(b.pnl>=0?'+':'')+Math.round(b.pnl).toLocaleString()+'</td><td class="'+pnlCls+'">$'+(avg>=0?'+':'')+avg.toFixed(0)+'</td>';
+            allCombos.forEach(c=>{
+                const cc=b.combos[c];
+                if(cc.n>0){
+                    const cpnl=cc.pnl;
+                    rows+='<td class="'+(cpnl>=0?'g':'r')+'" style="font-size:10px">$'+(cpnl>=0?'+':'')+Math.round(cpnl)+'<span class="d"> ('+cc.n+'t)</span></td>';
+                }else{
+                    rows+='<td class="d" style="font-size:10px">\u2014</td>';
+                }
+            });
+            rows+='</tr>';
+        });
+        return '<div class="card"><div class="card-header"><h3>Rolling 12-Window PnL</h3><span class="d mono" style="font-size:10px">'+sortedWins.length+' windows, '+blocks.length+' blocks</span></div><div style="overflow-x:auto;max-height:400px;overflow-y:auto"><table><thead><tr>'+hdr+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    })()}
     <div class="card" style="padding:16px;margin-bottom:14px"><div style="height:350px"><canvas id="session-combo-chart"></canvas></div></div>
     <div class="card"><div class="card-header"><h3>Trade Log</h3>
       <div style="display:flex;gap:6px;align-items:center">
@@ -1970,13 +2044,8 @@ async function refreshSessionLive(name){
         if(u('live-noask')) u('live-noask').textContent=fresh.book_bid?((1-fresh.book_bid)*100).toFixed(1)+'\u00a2':'\u2014';
         if(u('live-updated')) u('live-updated').textContent=ago(fresh.updated);
         if(u('live-window')&&fresh.current_window) u('live-window').textContent=winRange(fresh.current_window);
-        // Check if new trades arrived — if so, do a full reload with CSV data
-        const liveTrades=fresh.trades||0;
-        const csvTrades=old.csv_trades||0;
-        if(liveTrades>csvTrades){
-            // New trades! Full reload to get CSV data
-            loadSession(name);
-        }
+        // Don't auto-reload on new trades — user clicks Sync manually
+        // This prevents table/chart flickering every 3 seconds
     }catch(e){}
 }
 function togglePause(){
@@ -2159,16 +2228,8 @@ function _updateSessionLive(d){
         S.sessionData[S.selectedSession].window_end = d.window_end;
         S.sessionData[S.selectedSession].current_window = d.current_window;
     }
-    // Check if trades count changed → full re-render to show new trades
-    const cached = S.sessionData[S.selectedSession];
-    if(cached && d.trades !== undefined) {
-        const oldTrades = cached._lastTradeCount || 0;
-        if(d.trades > oldTrades) {
-            cached._lastTradeCount = d.trades;
-            // New trade detected — reload session with CSV data
-            loadSession(S.selectedSession);
-        }
-    }
+    // Don't auto-reload on new trades — user clicks Sync manually
+    // This prevents table/chart flickering on SSE updates
 }
 
 function _updateOverviewFromSSE(){
