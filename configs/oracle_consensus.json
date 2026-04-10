@@ -1,0 +1,22 @@
+{
+    "_description": "Oracle CONSENSUS — edge table + Coinbase/Bybit multi-exchange confirmation. Tests if independent venue agreement filters chop better than single-exchange impulse.",
+    "ARCHITECTURE": "oracle_consensus",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 200,
+    "MAX_SHARES": 600,
+    "MAX_RISK_PCT": 0.99,
+    "STARTING_BANKROLL": 999999,
+    "OR_BASE_DOLLARS": 200,
+    "OR_PHASE1_MIN_EDGE": 0.08,
+    "OR_PHASE2_MIN_EDGE": 0.05,
+    "OR_MAX_ENTRY": 0.88,
+    "OR_MIN_ENTRY": 0.10,
+    "OR_COOLDOWN_SEC": 10,
+    "IC_MIN_CONFIRM_EXCHANGES": 1,
+    "IC_CONFIRM_WINDOW_SEC": 5,
+    "IC_CONFIRM_MIN_BPS": 1.0,
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false,
+    "SIGNAL_CHECK_MS": 50
+}

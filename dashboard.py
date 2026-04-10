@@ -5,10 +5,14 @@ localhost:5555
 VPS data streams in via WebSocket relay (port 8765).
 Frontend receives Server-Sent Events (SSE) for real-time updates.
 No polling, no SSH, no scp for live data.
+
+Set DASH_ON_VPS=1 to run in VPS mode (local commands instead of SSH,
+connects to ws_relay on localhost, basic auth enabled).
 """
 
 import asyncio
 import csv
+import functools
 import json
 import os
 import queue
@@ -23,10 +27,37 @@ from flask import Flask, Response, render_template_string, jsonify, request, red
 app = Flask(__name__)
 app.secret_key = "pm-bot-dash"
 
+# ══════════════════════════════════════════════════════════════
+# VPS mode detection — when running ON the VPS, use local commands
+# ══════════════════════════════════════════════════════════════
+ON_VPS = os.environ.get("DASH_ON_VPS", "0") == "1"
+
 CONFIGS_DIR = Path("configs")
 DATA_DIR = Path("data")
-VPS_HOST = "167.172.50.38"
+VPS_HOST = "127.0.0.1" if ON_VPS else "167.172.50.38"
 VPS_WS_PORT = 8765
+
+# ══════════════════════════════════════════════════════════════
+# Basic auth — only enforced in VPS mode (publicly accessible)
+# ══════════════════════════════════════════════════════════════
+DASH_USER = os.environ.get("DASH_USER", "admin")
+DASH_PASS = os.environ.get("DASH_PASS", "")
+
+
+def _check_auth(username, password):
+    return username == DASH_USER and password == DASH_PASS
+
+
+@app.before_request
+def _enforce_auth():
+    """Basic auth gate — only active in VPS mode with a password set."""
+    if not ON_VPS or not DASH_PASS:
+        return None
+    auth = request.authorization
+    if not auth or not _check_auth(auth.username, auth.password):
+        return Response(
+            "Login required", 401,
+            {"WWW-Authenticate": 'Basic realm="Polymarket Dashboard"'})
 
 # ══════════════════════════════════════════════════════════════
 # Real-time VPS cache — updated via WebSocket relay
@@ -103,9 +134,76 @@ def _bg_vps_ws():
         time.sleep(3)
 
 
+# ══════════════════════════════════════════════════════════════
+# Viability cache — periodically recomputes from CSVs and gets
+# injected into SSE updates so the live cards show the metrics.
+# ══════════════════════════════════════════════════════════════
+_viability_cache = {}  # session_name -> viability dict
+_viability_cache_lock = threading.Lock()
+
+
+def _refresh_viability_cache():
+    """Recompute viability for every session with a trades.csv."""
+    new_cache = {}
+    if not DATA_DIR.exists():
+        return
+    for d in sorted(DATA_DIR.iterdir()):
+        if not d.is_dir() or d.name.startswith("_"):
+            continue
+        # Find the trades.csv
+        csv_path = None
+        for fname in ["trades.csv", "paper_trades_v2.csv"]:
+            p = d / fname
+            if p.exists():
+                csv_path = p
+                break
+        if not csv_path:
+            continue
+        try:
+            trade_series = []
+            with open(csv_path) as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    result = (row.get("result") or "").strip()
+                    if result not in ("WIN", "LOSS"):
+                        continue
+                    try:
+                        ts_val = float(row.get("timestamp", 0) or 0)
+                        p_val = float(row.get("pnl_taker", 0) or 0)
+                        if ts_val > 0:
+                            trade_series.append((ts_val, p_val))
+                    except (ValueError, TypeError):
+                        pass
+            if trade_series:
+                new_cache[d.name] = _compute_viability_metrics(trade_series)
+        except Exception:
+            pass
+    with _viability_cache_lock:
+        _viability_cache.clear()
+        _viability_cache.update(new_cache)
+
+
+def _bg_viability_refresh():
+    """Background thread: recompute viability every 30s and broadcast."""
+    while True:
+        try:
+            _refresh_viability_cache()
+            with _viability_cache_lock:
+                snapshot = dict(_viability_cache)
+            if snapshot:
+                _push_sse({"type": "viability", "viability": snapshot})
+        except Exception as e:
+            print("[viability] error: {}".format(e))
+        time.sleep(30)
+
+
 # Start WebSocket client thread
 _ws_thread = threading.Thread(target=_bg_vps_ws, daemon=True)
 _ws_thread.start()
+
+# Start viability refresh thread
+_viability_thread = threading.Thread(target=_bg_viability_refresh, daemon=True)
+_viability_thread.start()
 
 KNOB_DEFS = {
     "BASE_TRADE_DOLLARS": {"default": 100, "desc": "$ per trade", "min": 1, "max": 10000, "step": 1},
@@ -143,9 +241,13 @@ def validate_config(config):
 
 def ssh_cmd(cmd):
     try:
-        r = subprocess.run(["ssh", "-q", "-o", "ConnectTimeout=3",
-                            "root@167.172.50.38", cmd],
-                           capture_output=True, text=True, timeout=10)
+        if ON_VPS:
+            r = subprocess.run(["bash", "-c", cmd],
+                               capture_output=True, text=True, timeout=10)
+        else:
+            r = subprocess.run(["ssh", "-q", "-o", "ConnectTimeout=3",
+                                "root@167.172.50.38", cmd],
+                               capture_output=True, text=True, timeout=10)
         return r.stdout
     except Exception:
         return ""
@@ -162,7 +264,8 @@ def get_session_data(name):
 
 
 def get_csv_stats(name):
-    """Read trade stats from the CSV file (source of truth for historical data)."""
+    """Read trade stats from the CSV file (source of truth for historical data).
+    Also computes viability metrics: R², %6h+, worst 6h, calmar."""
     csv_path = None
     for fname in ["trades.csv", "paper_trades_v2.csv"]:
         p = DATA_DIR / name / fname
@@ -175,6 +278,8 @@ def get_csv_stats(name):
         trades = 0
         wins = 0
         pnl = 0.0
+        # Also collect (timestamp, pnl) pairs for viability scoring
+        trade_series = []
         with open(csv_path) as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -185,13 +290,171 @@ def get_csv_stats(name):
                     if result == "WIN":
                         wins += 1
                     try:
-                        pnl += float(pnl_val)
+                        p_val = float(pnl_val)
+                        pnl += p_val
+                        ts_val = float(row.get("timestamp", 0) or 0)
+                        if ts_val > 0:
+                            trade_series.append((ts_val, p_val))
                     except (ValueError, TypeError):
                         pass
         wr = round(wins / trades * 100, 1) if trades > 0 else 0
-        return {"trades": trades, "wins": wins, "wr": wr, "pnl_taker": round(pnl)}
+
+        viability = _compute_viability_metrics(trade_series)
+        return {
+            "trades": trades, "wins": wins, "wr": wr, "pnl_taker": round(pnl),
+            "viability": viability,
+        }
     except Exception:
         return None
+
+
+def _compute_viability_metrics(trade_series):
+    """Compute temporal consistency metrics from a list of (timestamp, pnl) tuples.
+
+    Returns: {r_squared, rolling_pct, worst_6h, calmar, max_dd, viability}
+    where viability is one of: 'viable', 'borderline', 'not_viable', 'insufficient_data'
+    """
+    import math
+    if len(trade_series) < 30:
+        return {
+            "r_squared": None, "rolling_pct": None, "worst_6h": None,
+            "calmar": None, "max_dd": None, "viability": "insufficient_data",
+        }
+
+    # Sort by timestamp
+    sorted_trades = sorted(trade_series, key=lambda x: x[0])
+
+    # Cumulative PnL
+    cum = []
+    c = 0.0
+    for ts, p in sorted_trades:
+        c += p
+        cum.append((ts, c))
+
+    n = len(cum)
+    duration_h = (cum[-1][0] - cum[0][0]) / 3600
+
+    # Max drawdown
+    peak = 0.0
+    max_dd = 0.0
+    for ts, c in cum:
+        if c > peak:
+            peak = c
+        dd = peak - c
+        if dd > max_dd:
+            max_dd = dd
+
+    total_pnl = cum[-1][1]
+
+    # Linearity: R² of linear regression on equity curve
+    times = [t for t, _ in cum]
+    pnls = [p for _, p in cum]
+    t0 = times[0]
+    norm_t = [t - t0 for t in times]
+
+    n_pts = len(norm_t)
+    sum_t = sum(norm_t)
+    sum_p = sum(pnls)
+    sum_tt = sum(t * t for t in norm_t)
+    sum_tp = sum(t * p for t, p in zip(norm_t, pnls))
+    mean_t = sum_t / n_pts
+    mean_p = sum_p / n_pts
+
+    denom = sum_tt - n_pts * mean_t * mean_t
+    if denom <= 0:
+        slope, intercept = 0.0, mean_p
+    else:
+        slope = (sum_tp - n_pts * mean_t * mean_p) / denom
+        intercept = mean_p - slope * mean_t
+
+    ss_tot = sum((p - mean_p) ** 2 for p in pnls)
+    ss_res = sum((p - (intercept + slope * t)) ** 2 for t, p in zip(norm_t, pnls))
+    r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+    # Penalize negative slopes (downward trends shouldn't get high R²)
+    if slope < 0:
+        r_squared = -abs(r_squared)
+
+    # Rolling 6h windows positive %
+    rolling_pct = None
+    worst_6h = None
+    if duration_h >= 12:
+        window_h = 6
+        step_h = 1
+        positive_count = 0
+        total_windows = 0
+        worst_window_pnl = float("inf")
+        first_ts = cum[0][0]
+        last_ts = cum[-1][0]
+
+        t = first_ts
+        while t + window_h * 3600 <= last_ts:
+            window_start = t
+            window_end = t + window_h * 3600
+            start_pnl = None
+            end_pnl = None
+            for ts, c in cum:
+                if start_pnl is None and ts >= window_start:
+                    start_pnl = c
+                if ts <= window_end:
+                    end_pnl = c
+                else:
+                    break
+            if start_pnl is not None and end_pnl is not None:
+                window_pnl = end_pnl - start_pnl
+                if window_pnl > 0:
+                    positive_count += 1
+                if window_pnl < worst_window_pnl:
+                    worst_window_pnl = window_pnl
+                total_windows += 1
+            t += step_h * 3600
+
+        if total_windows > 0:
+            rolling_pct = round(positive_count / total_windows * 100, 1)
+            worst_6h = round(worst_window_pnl)
+
+    calmar = round(total_pnl / max_dd, 2) if max_dd > 0 else None
+
+    # Tiered verdict — three levels of thresholds
+    def count_passes(r2_t, p6_t, w6_t, cal_t):
+        c = 0
+        if r_squared is not None and r_squared >= r2_t: c += 1
+        if rolling_pct is not None and rolling_pct >= p6_t: c += 1
+        if worst_6h is not None and worst_6h >= w6_t: c += 1
+        if calmar is not None and calmar >= cal_t: c += 1
+        return c
+
+    # VIABLE: live-ready, must pass all 4
+    viable_passes = count_passes(0.85, 75, -500, 2.0)
+    # PROMISING: strong signal, at least 3 of 4
+    promising_passes = count_passes(0.70, 60, -2000, 1.5)
+    # BORDERLINE: has edge but variance issues, at least 3 of 4
+    borderline_passes = count_passes(0.55, 55, -3000, 1.0)
+
+    if duration_h < 12 or rolling_pct is None:
+        verdict = "insufficient_data"
+        flags_passed = 0
+    elif viable_passes == 4:
+        verdict = "viable"
+        flags_passed = 4
+    elif promising_passes >= 3:
+        verdict = "promising"
+        flags_passed = promising_passes
+    elif borderline_passes >= 3:
+        verdict = "borderline"
+        flags_passed = borderline_passes
+    else:
+        verdict = "not_viable"
+        flags_passed = max(promising_passes, borderline_passes)
+
+    return {
+        "r_squared": round(r_squared, 3) if r_squared is not None else None,
+        "rolling_pct": rolling_pct,
+        "worst_6h": worst_6h,
+        "calmar": calmar,
+        "max_dd": round(max_dd),
+        "viability": verdict,
+        "flags_passed": flags_passed,
+    }
 
 
 def _get_session_architecture(name):
@@ -286,6 +549,7 @@ def get_all_sessions():
                 "architecture": arch,
                 "trades": csv_stats["trades"], "wins": csv_stats["wins"],
                 "wr": csv_stats["wr"], "pnl_taker": csv_stats["pnl_taker"],
+                "viability": csv_stats.get("viability"),
             })
             seen.add(name)
 
@@ -584,30 +848,33 @@ FRONTEND = r"""<!DOCTYPE html>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
 :root{
-  --bg:#08090d;--bg2:#0d1017;--card:#111622;--card2:#161d2a;--border:#1a2236;--border2:#243049;
-  --text:#d1d5e0;--dim:#5a6478;--dim2:#3d4555;
-  --blue:#4d8ef7;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;--purple:#8b5cf6;--cyan:#06b6d4;
-  --green-bg:rgba(16,185,129,.08);--red-bg:rgba(239,68,68,.08);--blue-bg:rgba(77,142,247,.08);
-  --green-border:rgba(16,185,129,.2);--red-border:rgba(239,68,68,.2);--blue-border:rgba(77,142,247,.2);
+  --bg:#06070b;--bg2:#0a0d14;--card:#0f1219;--card2:#141920;--border:#1a1f2e;--border2:#252d3f;
+  --text:#e2e5eb;--dim:#636b7e;--dim2:#3d4555;
+  --blue:#5b9cf9;--green:#00d68f;--red:#ff5c5c;--yellow:#f0b429;--purple:#a78bfa;--cyan:#22d3ee;
+  --green-bg:rgba(0,214,143,.06);--red-bg:rgba(255,92,92,.06);--blue-bg:rgba(91,156,249,.06);
+  --green-border:rgba(0,214,143,.15);--red-border:rgba(255,92,92,.15);--blue-border:rgba(91,156,249,.15);
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:13px;-webkit-font-smoothing:antialiased}
-a{color:var(--blue);text-decoration:none}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:13px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;line-height:1.5}
+a{color:var(--blue);text-decoration:none;transition:color .15s}
+a:hover{color:#7db4ff}
 .mono{font-family:'JetBrains Mono',monospace}
+::selection{background:rgba(91,156,249,.25);color:#fff}
 
 .shell{display:flex;flex-direction:column;height:100vh}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:48px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:44px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;backdrop-filter:blur(12px)}
 .topbar-left{display:flex;align-items:center;gap:20px}
-.logo{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;background:linear-gradient(135deg,var(--blue),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.5px;cursor:pointer}
-.nav{display:flex;gap:2px}
-.nav-item{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:500;color:var(--dim);cursor:pointer;transition:all .15s;letter-spacing:.2px}
-.nav-item:hover{color:var(--text);background:var(--card)}
-.nav-item.active{color:var(--blue);background:var(--blue-bg)}
-.topbar-right{display:flex;align-items:center;gap:10px}
-.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px rgba(16,185,129,.4)}
-.status-label{font-size:11px;color:var(--dim);font-family:'JetBrains Mono',monospace}
+.logo{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;background:linear-gradient(135deg,#7db4ff,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.5px;cursor:pointer}
+.nav{display:flex;gap:1px}
+.nav-item{padding:6px 16px;border-radius:6px;font-size:11.5px;font-weight:600;color:var(--dim);cursor:pointer;transition:all .2s;letter-spacing:.3px}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.nav-item.active{color:var(--blue);background:var(--blue-bg);box-shadow:inset 0 0 0 1px var(--blue-border)}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px rgba(0,214,143,.5);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.status-label{font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;letter-spacing:.5px}
 
-.content{flex:1;overflow-y:auto;padding:20px 24px}
+.content{flex:1;overflow-y:auto;padding:20px 28px}
 
 /* Loading */
 .loading{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--dim);gap:10px}
@@ -619,83 +886,86 @@ a{color:var(--blue);text-decoration:none}
 .ov-delta{display:inline-block;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-left:6px;animation:deltaFade 240s ease-out forwards}
 
 /* Stat boxes */
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px}
-.stat-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px}
-.stat-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin-bottom:4px}
-.stat-value{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;letter-spacing:-.5px;transition:color .3s}
-.stat-sub{font-size:10px;color:var(--dim);margin-top:2px;font-family:'JetBrains Mono',monospace}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px;margin-bottom:16px}
+.stat-box{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;transition:border-color .2s}
+.stat-box:hover{border-color:var(--border2)}
+.stat-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:6px}
+.stat-value{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;letter-spacing:-.5px;transition:color .3s;line-height:1.1}
+.stat-sub{font-size:10px;color:var(--dim);margin-top:4px;font-family:'JetBrains Mono',monospace}
 
 /* Session cards */
-.sessions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-bottom:20px}
-.session-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
-.session-card:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:0 4px 24px rgba(0,0,0,.3)}
+.sessions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px;margin-bottom:20px}
+.session-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;cursor:pointer;transition:all .25s ease;position:relative;overflow:hidden}
+.session-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
 .session-card.positive{border-left:3px solid var(--green)}
 .session-card.negative{border-left:3px solid var(--red)}
 .session-card.zero{border-left:3px solid var(--dim2)}
-.sc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
-.sc-name{font-size:14px;font-weight:700;letter-spacing:-.2px}
+.sc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.sc-name{font-size:13px;font-weight:700;letter-spacing:-.2px}
 .sc-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
-.sc-dot.on{background:var(--green);box-shadow:0 0 8px rgba(16,185,129,.5)}
+.sc-dot.on{background:var(--green);box-shadow:0 0 10px rgba(0,214,143,.6)}
 .sc-dot.off{background:var(--dim2)}
-.sc-where{font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;text-transform:uppercase}
-.sc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.sc-stat-label{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
-.sc-stat-value{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-top:1px;transition:color .3s}
-.sc-bar{height:3px;background:var(--border);border-radius:2px;margin-top:12px;overflow:hidden}
-.sc-bar-fill{height:100%;border-radius:2px;transition:width .5s}
+.sc-where{font-size:9px;color:var(--dim);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.5px}
+.sc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.sc-stat-label{font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.sc-stat-value{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-top:2px;transition:color .3s;line-height:1.2}
+.sc-bar{height:2px;background:var(--border);border-radius:1px;margin-top:10px;overflow:hidden}
+.sc-bar-fill{height:100%;border-radius:1px;transition:width .6s ease}
 
 /* Tables */
 table{width:100%;border-collapse:separate;border-spacing:0}
 thead{position:sticky;top:0;z-index:1}
-th{text-align:left;padding:8px 12px;color:var(--dim);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;background:var(--card);border-bottom:1px solid var(--border)}
-td{padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
-tr:hover td{background:rgba(77,142,247,.02)}
-th:first-child{border-radius:8px 0 0 0}th:last-child{border-radius:0 8px 0 0}
+th{text-align:left;padding:7px 12px;color:var(--dim);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;background:var(--bg2);border-bottom:1px solid var(--border)}
+td{padding:7px 12px;border-bottom:1px solid rgba(26,31,46,.5);font-size:11.5px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+tr:hover td{background:rgba(91,156,249,.03)}
+th:first-child{border-radius:6px 0 0 0}th:last-child{border-radius:0 6px 0 0}
 
 /* Tags */
-.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:.3px}
+.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:.4px}
 .tag-win{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
 .tag-loss{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
 .tag-live{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
-.tag-dead{background:rgba(90,100,120,.1);color:var(--dim);border:1px solid rgba(90,100,120,.2)}
+.tag-dead{background:rgba(99,107,126,.08);color:var(--dim);border:1px solid rgba(99,107,126,.15)}
 .tag-session{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
 
-.pill{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;margin:1px;font-family:'JetBrains Mono',monospace}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;margin:1px;font-family:'JetBrains Mono',monospace;letter-spacing:.3px}
 .pill-up{background:var(--green-bg);color:var(--green)}.pill-dn{background:var(--red-bg);color:var(--red)}
 
 .g{color:var(--green)}.r{color:var(--red)}.y{color:var(--yellow)}.d{color:var(--dim)}.b{color:var(--blue)}.p{color:var(--purple)}.cy{color:var(--cyan)}
 
 /* Live bar */
-.live-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:16px}
-.live-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--dim)}
-.live-value{font-size:14px;font-weight:600;margin-top:3px;font-family:'JetBrains Mono',monospace;transition:color .3s}
-.timer-value{font-size:28px;font-weight:800;color:var(--blue);font-family:'JetBrains Mono',monospace;letter-spacing:-1px}
-.progress{height:4px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+.live-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;padding:14px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:14px}
+.live-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--dim)}
+.live-value{font-size:13px;font-weight:600;margin-top:3px;font-family:'JetBrains Mono',monospace;transition:color .3s}
+.timer-value{font-size:26px;font-weight:800;color:var(--blue);font-family:'JetBrains Mono',monospace;letter-spacing:-1px}
+.progress{height:3px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
 .progress-fill{height:100%;border-radius:2px;transition:width 1s linear}
 
 .winbar{height:3px;border-radius:2px;background:var(--red-bg);margin-top:4px}
 .winbar-fill{height:100%;border-radius:2px;transition:width .5s}
 
 /* Buttons */
-.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:6px;font-size:11px;font-family:'Inter',sans-serif;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text);transition:all .15s;letter-spacing:.2px}
-.btn:hover{background:var(--card2);border-color:var(--border2)}
-.btn-green{border-color:var(--green-border);color:var(--green)}.btn-green:hover{background:var(--green);color:#fff;border-color:var(--green)}
-.btn-red{border-color:var(--red-border);color:var(--red)}.btn-red:hover{background:var(--red);color:#fff;border-color:var(--red)}
-.btn-blue{border-color:var(--blue-border);color:var(--blue)}.btn-blue:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
-.btn-sm{padding:4px 10px;font-size:10px}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:6px;font-size:11px;font-family:'Inter',sans-serif;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text);transition:all .2s ease;letter-spacing:.2px}
+.btn:hover{background:var(--card2);border-color:var(--border2);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn-green{border-color:var(--green-border);color:var(--green)}.btn-green:hover{background:rgba(0,214,143,.12);color:var(--green);border-color:var(--green)}
+.btn-red{border-color:var(--red-border);color:var(--red)}.btn-red:hover{background:rgba(255,92,92,.12);color:var(--red);border-color:var(--red)}
+.btn-blue{border-color:var(--blue-border);color:var(--blue)}.btn-blue:hover{background:rgba(91,156,249,.15);color:#fff;border-color:var(--blue)}
+.btn-sm{padding:4px 10px;font-size:10px;border-radius:5px}
 
 /* Filters */
 .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .filter-select{background:var(--card);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:11px;font-family:'Inter',sans-serif;cursor:pointer}
 .filter-select:focus{border-color:var(--blue);outline:none}
 
-.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.section-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--dim)}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim)}
 
 /* Card */
-.card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
-.card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.card-header h3{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--dim)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px;transition:border-color .2s}
+.card:hover{border-color:var(--border2)}
+.card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--dim)}
 
 /* Charts */
 .chart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:12px;margin-bottom:20px}
@@ -718,7 +988,16 @@ th:first-child{border-radius:8px 0 0 0}th:last-child{border-radius:0 8px 0 0}
 .empty-title{font-size:14px;font-weight:600;margin-top:8px}
 
 /* Scrollbar */
-::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--border2)}
+
+/* Analysis cards */
+.analysis-section .card{border:1px solid var(--border)}
+.analysis-section .stat-value{font-size:20px}
+
+/* Smooth page transitions */
+#content{animation:pageIn .15s ease}
+@keyframes pageIn{from{opacity:.85;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+
 @media(max-width:768px){.sessions-grid{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}.chart-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -726,7 +1005,7 @@ th:first-child{border-radius:8px 0 0 0}th:last-child{border-radius:0 8px 0 0}
 <div class="shell">
 
 <!-- Global Window Banner -->
-<div style="background:linear-gradient(135deg,var(--bg2),#0f1420);border-bottom:1px solid var(--border);padding:6px 24px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;flex-shrink:0">
+<div style="background:var(--bg2);border-bottom:1px solid var(--border);padding:5px 28px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;flex-shrink:0">
   <!-- Left: Timer + Window -->
   <div style="display:flex;align-items:center;gap:12px">
     <div class="logo" onclick="navigate('overview')" style="font-size:14px;cursor:pointer">PM</div>
@@ -920,6 +1199,18 @@ function _ovSortSessions(ss){
         else if(key==='wr'){va=a.wr||0;vb=b.wr||0}
         else if(key==='trades'){va=a.trades||0;vb=b.trades||0}
         else if(key==='avg'){va=a.trades?(a.pnl_taker||0)/a.trades:0;vb=b.trades?(b.pnl_taker||0)/b.trades:0}
+        else if(key==='viability'){
+            // Sort by viability: viable > promising > borderline > not_viable > insufficient
+            const order={'viable':5,'promising':4,'borderline':3,'not_viable':2,'insufficient_data':1};
+            va=order[(a.viability||{}).viability]||0;
+            vb=order[(b.viability||{}).viability]||0;
+            // Tiebreak by flags_passed
+            if(va===vb){
+                va=(a.viability||{}).flags_passed||0;
+                vb=(b.viability||{}).flags_passed||0;
+            }
+        }
+        else if(key==='r2'){va=(a.viability||{}).r_squared||-99;vb=(b.viability||{}).r_squared||-99}
         else if(key==='name'){return dir*a.name.localeCompare(b.name)}
         else if(key==='arch'){return dir*(a.architecture||'').localeCompare(b.architecture||'')}
         else{va=a.pnl_taker||0;vb=b.pnl_taker||0}
@@ -1194,7 +1485,7 @@ function renderOverview(el) {
     });
 
     // Sort indicator
-    const sortKeys=[{k:'pnl',l:'PnL'},{k:'wr',l:'WR'},{k:'trades',l:'Trades'},{k:'avg',l:'$/Trade'},{k:'name',l:'Name'},{k:'arch',l:'Arch'}];
+    const sortKeys=[{k:'pnl',l:'PnL'},{k:'wr',l:'WR'},{k:'trades',l:'Trades'},{k:'avg',l:'$/Trade'},{k:'viability',l:'Viability'},{k:'r2',l:'R²'},{k:'name',l:'Name'},{k:'arch',l:'Arch'}];
     let sortBtns='';
     sortKeys.forEach(({k,l})=>{
         const active=S._ovSort===k;
@@ -1211,8 +1502,23 @@ function renderOverview(el) {
         const dpnl=ovDeltaBadge('sc_pnl_'+s.name,p,null,d=>'$'+Math.round(d).toLocaleString());
         const dwr=ovDeltaBadge('sc_wr_'+s.name,w,null,d=>d.toFixed(1)+'pp');
         const dtrades=ovDeltaBadge('sc_trades_'+s.name,s.trades||0,null,d=>d.toString());
+        // Viability badge — 4 tiers now
+        const v = s.viability || {};
+        const verdict = v.viability || 'insufficient_data';
+        const vColor = verdict==='viable'?'#10b981':
+                       verdict==='promising'?'#3b82f6':
+                       verdict==='borderline'?'#f59e0b':
+                       verdict==='not_viable'?'#ef4444':'#6b7280';
+        const vLabel = verdict==='viable'?'VIABLE':
+                       verdict==='promising'?'PROMISING':
+                       verdict==='borderline'?'BORDER':
+                       verdict==='not_viable'?'NOT VIABLE':'NEW';
+        const vTooltip = verdict==='insufficient_data'?'Need 30+ trades and 12+ hours of data':
+            'R²: '+(v.r_squared!=null?v.r_squared:'—')+'  |  6h+: '+(v.rolling_pct!=null?v.rolling_pct+'%':'—')+'  |  Worst 6h: $'+(v.worst_6h!=null?v.worst_6h.toLocaleString():'—')+'  |  Calmar: '+(v.calmar!=null?v.calmar:'—')+'  |  Flags: '+(v.flags_passed||0)+'/4';
+        const vBadge = `<span title="${vTooltip}" style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${vColor}22;color:${vColor};border:1px solid ${vColor};margin-left:6px;letter-spacing:0.5px">${vLabel}</span>`;
+
         cards += `<div class="session-card ${cls}" onclick="navigate('session','${s.name}')">
-          <div class="sc-top"><div><span class="d mono" style="font-size:10px;font-weight:700">#${i+1}</span> <span class="sc-name">${s.name}</span></div>
+          <div class="sc-top"><div><span class="d mono" style="font-size:10px;font-weight:700">#${i+1}</span> <span class="sc-name">${s.name}</span>${vBadge}</div>
           <div style="display:flex;align-items:center;gap:5px"><span class="sc-where">${s.architecture||'impulse_lag'}</span><span class="sc-where">${s.where}</span><div class="sc-dot ${active?'on':'off'}"></div></div></div>
           <div class="sc-stats">
             <div><div class="sc-stat-label">PnL</div><div class="sc-stat-value ${pc(p)}">${fp(p)}${dpnl}</div></div>
@@ -1221,6 +1527,12 @@ function renderOverview(el) {
             <div><div class="sc-stat-label">$/Trade</div><div class="sc-stat-value ${pc(avgP)}">${s.trades>0?fps(avgP):'\u2014'}</div></div>
           </div>
           <div class="sc-bar"><div class="sc-bar-fill" style="width:${Math.min(100,w)}%;background:${bc}"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-top:6px;font-family:monospace">
+            <span>R²: <span style="color:${v.r_squared!=null && v.r_squared>=0.85?'#10b981':v.r_squared!=null && v.r_squared>=0.5?'#f59e0b':'#ef4444'}">${v.r_squared!=null?v.r_squared.toFixed(2):'—'}</span></span>
+            <span>6h+: <span style="color:${v.rolling_pct!=null && v.rolling_pct>=75?'#10b981':v.rolling_pct!=null && v.rolling_pct>=60?'#f59e0b':'#ef4444'}">${v.rolling_pct!=null?v.rolling_pct+'%':'—'}</span></span>
+            <span>w6h: <span style="color:${v.worst_6h!=null && v.worst_6h>=-500?'#10b981':v.worst_6h!=null && v.worst_6h>=-2000?'#f59e0b':'#ef4444'}">${v.worst_6h!=null?'$'+(v.worst_6h>0?'+':'')+v.worst_6h.toLocaleString():'—'}</span></span>
+            <span>Cal: <span style="color:${v.calmar!=null && v.calmar>=2?'#10b981':v.calmar!=null && v.calmar>=1?'#f59e0b':'#ef4444'}">${v.calmar!=null?v.calmar:'—'}</span></span>
+          </div>
         </div>`;
     });
     if (!filtered.length) cards = '<div class="empty"><div class="empty-title">No sessions match filter</div></div>';
@@ -2166,13 +2478,28 @@ function connectSSE(){
     evtSource.onmessage = (e) => {
         try {
             const data = JSON.parse(e.data);
+            // Viability metrics — merge into existing cache entries
+            if(data.type === 'viability') {
+                const v = data.viability || {};
+                Object.entries(v).forEach(([name, vData]) => {
+                    if(!_sseVpsCache[name]) _sseVpsCache[name] = {};
+                    _sseVpsCache[name].viability = vData;
+                });
+                // Re-render overview if visible
+                if(S.page === 'overview') {
+                    _updateOverviewFromSSE();
+                }
+                return;
+            }
             if(data.type === 'full_state' || data.type === 'update') {
                 const sessions = data.sessions || data.changed || {};
                 const removed = data.removed || [];
 
-                // Update VPS cache
+                // Update VPS cache (preserve any existing viability data)
                 Object.entries(sessions).forEach(([name, stats]) => {
+                    const existingViability = (_sseVpsCache[name] || {}).viability;
                     _sseVpsCache[name] = stats;
+                    if(existingViability) _sseVpsCache[name].viability = existingViability;
                     // Merge into session data for session detail
                     if(!S.sessionData[name]) S.sessionData[name] = {};
                     Object.assign(S.sessionData[name], stats);
@@ -2244,6 +2571,7 @@ function _updateOverviewFromSSE(){
         windows_settled: d.windows_settled || 0,
         updated: d.updated || 0,
         started: d.started || 0,
+        viability: d.viability || null,
     }));
     S.sessions = sessions;
 
@@ -2373,6 +2701,13 @@ def api_stream():
                 "type": "full_state", "sessions": initial,
                 "connected": _vps_connected[0],
             }))
+            # Send current viability snapshot too
+            with _viability_cache_lock:
+                v_snapshot = dict(_viability_cache)
+            if v_snapshot:
+                yield "data: {}\n\n".format(json.dumps({
+                    "type": "viability", "viability": v_snapshot,
+                }))
             while True:
                 try:
                     msg = q.get(timeout=15)

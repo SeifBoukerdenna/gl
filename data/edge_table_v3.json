@@ -1,0 +1,3233 @@
+{
+  "version": 3,
+  "metadata": {
+    "built_at": 1775790251.433557,
+    "history_days": 90,
+    "min_samples_per_cell": 50,
+    "bayesian_prior_w": 20,
+    "time_decay": {
+      "recent": 1.0,
+      "mid": 0.7,
+      "old": 0.4
+    },
+    "vol_thresholds": {
+      "low_max": 35.0,
+      "mid_max": 50.0
+    },
+    "wr_caps": {
+      "min": 0.05,
+      "max": 0.95
+    },
+    "levels": [
+      "L1: delta \u00d7 time",
+      "L2: + momentum",
+      "L3: + side",
+      "L4: + vol_regime"
+    ],
+    "L1_cells": 35,
+    "L2_cells": 97,
+    "L3_cells": 112,
+    "L4_cells": 294
+  },
+  "L1": {
+    "above|240-300": {
+      "wr": 0.6124,
+      "count": 2682.5,
+      "wins_w": 1645.1
+    },
+    "far_above|180-240": {
+      "wr": 0.8282,
+      "count": 1194.2,
+      "wins_w": 995.6
+    },
+    "far_above|120-180": {
+      "wr": 0.8995,
+      "count": 1718.1,
+      "wins_w": 1553.5
+    },
+    "far_above|60-120": {
+      "wr": 0.9488,
+      "count": 2068.6,
+      "wins_w": 1971.6
+    },
+    "above|0-60": {
+      "wr": 0.8465,
+      "count": 2655.8,
+      "wins_w": 2255.1
+    },
+    "near_above|240-300": {
+      "wr": 0.5663,
+      "count": 2605.9,
+      "wins_w": 1477.0
+    },
+    "near_above|180-240": {
+      "wr": 0.5948,
+      "count": 2147.6,
+      "wins_w": 1279.3
+    },
+    "above|120-180": {
+      "wr": 0.7156,
+      "count": 2810.5,
+      "wins_w": 2015.6
+    },
+    "above|60-120": {
+      "wr": 0.7704,
+      "count": 2761.8,
+      "wins_w": 2133.1
+    },
+    "above|180-240": {
+      "wr": 0.68,
+      "count": 2909.0,
+      "wins_w": 1981.7
+    },
+    "at_strike|120-180": {
+      "wr": 0.5416,
+      "count": 2252.7,
+      "wins_w": 1220.8
+    },
+    "below|60-120": {
+      "wr": 0.8492,
+      "count": 2038.0,
+      "wins_w": 1737.7
+    },
+    "below|0-60": {
+      "wr": 0.9191,
+      "count": 1963.2,
+      "wins_w": 1812.8
+    },
+    "near_below|240-300": {
+      "wr": 0.6017,
+      "count": 2008.4,
+      "wins_w": 1210.5
+    },
+    "at_strike|180-240": {
+      "wr": 0.5475,
+      "count": 2821.5,
+      "wins_w": 1545.8
+    },
+    "near_below|0-60": {
+      "wr": 0.7987,
+      "count": 1406.2,
+      "wins_w": 1129.1
+    },
+    "at_strike|240-300": {
+      "wr": 0.5465,
+      "count": 3840.8,
+      "wins_w": 2099.8
+    },
+    "near_above|60-120": {
+      "wr": 0.6439,
+      "count": 1707.7,
+      "wins_w": 1102.5
+    },
+    "far_above|0-60": {
+      "wr": 0.95,
+      "count": 2319.2,
+      "wins_w": 2291.2
+    },
+    "below|180-240": {
+      "wr": 0.7337,
+      "count": 1890.3,
+      "wins_w": 1391.5
+    },
+    "at_strike|60-120": {
+      "wr": 0.5315,
+      "count": 2102.1,
+      "wins_w": 1117.9
+    },
+    "near_below|120-180": {
+      "wr": 0.6846,
+      "count": 1609.3,
+      "wins_w": 1105.4
+    },
+    "near_above|120-180": {
+      "wr": 0.6068,
+      "count": 1988.1,
+      "wins_w": 1208.5
+    },
+    "at_strike|0-60": {
+      "wr": 0.6047,
+      "count": 1901.8,
+      "wins_w": 1152.2
+    },
+    "near_below|180-240": {
+      "wr": 0.6388,
+      "count": 1768.6,
+      "wins_w": 1132.6
+    },
+    "far_below|60-120": {
+      "wr": 0.95,
+      "count": 1561.7,
+      "wins_w": 1511.2
+    },
+    "far_below|0-60": {
+      "wr": 0.95,
+      "count": 1825.0,
+      "wins_w": 1821.5
+    },
+    "near_below|60-120": {
+      "wr": 0.7318,
+      "count": 1479.9,
+      "wins_w": 1087.6
+    },
+    "below|120-180": {
+      "wr": 0.7875,
+      "count": 2045.1,
+      "wins_w": 1616.2
+    },
+    "far_below|180-240": {
+      "wr": 0.869,
+      "count": 825.1,
+      "wins_w": 724.4
+    },
+    "far_below|120-180": {
+      "wr": 0.9177,
+      "count": 1249.2,
+      "wins_w": 1154.7
+    },
+    "below|240-300": {
+      "wr": 0.6726,
+      "count": 1261.2,
+      "wins_w": 851.7
+    },
+    "near_above|0-60": {
+      "wr": 0.6753,
+      "count": 1667.0,
+      "wins_w": 1129.2
+    },
+    "far_above|240-300": {
+      "wr": 0.7369,
+      "count": 452.4,
+      "wins_w": 338.1
+    },
+    "far_below|240-300": {
+      "wr": 0.7527,
+      "count": 255.0,
+      "wins_w": 197.0
+    }
+  },
+  "L2": {
+    "above|240-300|away": {
+      "wr": 0.6521,
+      "count": 2058.2,
+      "wins_w": 1342.9,
+      "parent_wr": 0.6124
+    },
+    "far_above|180-240|flat": {
+      "wr": 0.8589,
+      "count": 58.9,
+      "wins_w": 51.2,
+      "parent_wr": 0.8282
+    },
+    "far_above|120-180|away": {
+      "wr": 0.919,
+      "count": 1165.3,
+      "wins_w": 1071.3,
+      "parent_wr": 0.8995
+    },
+    "far_above|60-120|toward": {
+      "wr": 0.9458,
+      "count": 616.7,
+      "wins_w": 583.2,
+      "parent_wr": 0.9488
+    },
+    "above|0-60|toward": {
+      "wr": 0.8234,
+      "count": 845.6,
+      "wins_w": 695.8,
+      "parent_wr": 0.8465
+    },
+    "near_above|240-300|away": {
+      "wr": 0.6187,
+      "count": 1847.3,
+      "wins_w": 1143.9,
+      "parent_wr": 0.5663
+    },
+    "near_above|180-240|toward": {
+      "wr": 0.5317,
+      "count": 648.1,
+      "wins_w": 343.3,
+      "parent_wr": 0.5948
+    },
+    "above|120-180|away": {
+      "wr": 0.7567,
+      "count": 1546.1,
+      "wins_w": 1170.7,
+      "parent_wr": 0.7156
+    },
+    "above|60-120|away": {
+      "wr": 0.7761,
+      "count": 1408.6,
+      "wins_w": 1093.3,
+      "parent_wr": 0.7704
+    },
+    "above|0-60|away": {
+      "wr": 0.882,
+      "count": 1262.5,
+      "wins_w": 1114.2,
+      "parent_wr": 0.8465
+    },
+    "above|180-240|toward": {
+      "wr": 0.6765,
+      "count": 643.0,
+      "wins_w": 434.9,
+      "parent_wr": 0.68
+    },
+    "at_strike|120-180|toward": {
+      "wr": 0.5465,
+      "count": 786.8,
+      "wins_w": 430.1,
+      "parent_wr": 0.5416
+    },
+    "below|60-120|away": {
+      "wr": 0.8593,
+      "count": 1096.2,
+      "wins_w": 942.2,
+      "parent_wr": 0.8492
+    },
+    "below|0-60|toward": {
+      "wr": 0.9156,
+      "count": 679.4,
+      "wins_w": 622.0,
+      "parent_wr": 0.9191
+    },
+    "near_below|240-300|away": {
+      "wr": 0.6056,
+      "count": 1887.8,
+      "wins_w": 1143.4,
+      "parent_wr": 0.6017
+    },
+    "at_strike|180-240|toward": {
+      "wr": 0.5045,
+      "count": 966.8,
+      "wins_w": 486.9,
+      "parent_wr": 0.5475
+    },
+    "at_strike|120-180|away": {
+      "wr": 0.5405,
+      "count": 873.5,
+      "wins_w": 472.1,
+      "parent_wr": 0.5416
+    },
+    "near_below|0-60|away": {
+      "wr": 0.802,
+      "count": 594.7,
+      "wins_w": 477.0,
+      "parent_wr": 0.7987
+    },
+    "at_strike|240-300|away": {
+      "wr": 0.5722,
+      "count": 2544.2,
+      "wins_w": 1456.3,
+      "parent_wr": 0.5465
+    },
+    "at_strike|180-240|flat": {
+      "wr": 0.5617,
+      "count": 648.6,
+      "wins_w": 364.6,
+      "parent_wr": 0.5475
+    },
+    "near_above|60-120|away": {
+      "wr": 0.6775,
+      "count": 717.1,
+      "wins_w": 486.5,
+      "parent_wr": 0.6439
+    },
+    "below|0-60|away": {
+      "wr": 0.9261,
+      "count": 954.4,
+      "wins_w": 884.0,
+      "parent_wr": 0.9191
+    },
+    "far_above|0-60|away": {
+      "wr": 0.95,
+      "count": 1340.2,
+      "wins_w": 1331.1,
+      "parent_wr": 0.95
+    },
+    "below|180-240|away": {
+      "wr": 0.7575,
+      "count": 1350.4,
+      "wins_w": 1023.4,
+      "parent_wr": 0.7337
+    },
+    "at_strike|60-120|toward": {
+      "wr": 0.4968,
+      "count": 761.3,
+      "wins_w": 377.5,
+      "parent_wr": 0.5315
+    },
+    "above|180-240|away": {
+      "wr": 0.7061,
+      "count": 1776.2,
+      "wins_w": 1254.7,
+      "parent_wr": 0.68
+    },
+    "far_above|60-120|away": {
+      "wr": 0.95,
+      "count": 1240.8,
+      "wins_w": 1188.4,
+      "parent_wr": 0.9488
+    },
+    "near_below|120-180|away": {
+      "wr": 0.7066,
+      "count": 776.0,
+      "wins_w": 548.8,
+      "parent_wr": 0.6846
+    },
+    "far_above|180-240|away": {
+      "wr": 0.8284,
+      "count": 959.9,
+      "wins_w": 795.2,
+      "parent_wr": 0.8282
+    },
+    "far_above|0-60|toward": {
+      "wr": 0.95,
+      "count": 719.4,
+      "wins_w": 705.2,
+      "parent_wr": 0.95
+    },
+    "near_above|120-180|away": {
+      "wr": 0.6196,
+      "count": 872.7,
+      "wins_w": 541.0,
+      "parent_wr": 0.6068
+    },
+    "at_strike|0-60|toward": {
+      "wr": 0.5665,
+      "count": 686.3,
+      "wins_w": 388.0,
+      "parent_wr": 0.6047
+    },
+    "far_above|120-180|toward": {
+      "wr": 0.8691,
+      "count": 406.3,
+      "wins_w": 352.5,
+      "parent_wr": 0.8995
+    },
+    "near_above|60-120|toward": {
+      "wr": 0.604,
+      "count": 567.9,
+      "wins_w": 342.2,
+      "parent_wr": 0.6439
+    },
+    "near_below|180-240|away": {
+      "wr": 0.6517,
+      "count": 994.9,
+      "wins_w": 648.6,
+      "parent_wr": 0.6388
+    },
+    "near_below|120-180|toward": {
+      "wr": 0.6462,
+      "count": 510.5,
+      "wins_w": 329.1,
+      "parent_wr": 0.6846
+    },
+    "far_below|60-120|away": {
+      "wr": 0.95,
+      "count": 1024.7,
+      "wins_w": 991.4,
+      "parent_wr": 0.95
+    },
+    "far_below|0-60|flat": {
+      "wr": 0.95,
+      "count": 170.9,
+      "wins_w": 170.9,
+      "parent_wr": 0.95
+    },
+    "at_strike|180-240|away": {
+      "wr": 0.5752,
+      "count": 1206.1,
+      "wins_w": 694.3,
+      "parent_wr": 0.5475
+    },
+    "near_below|60-120|toward": {
+      "wr": 0.6946,
+      "count": 478.5,
+      "wins_w": 331.6,
+      "parent_wr": 0.7318
+    },
+    "below|180-240|flat": {
+      "wr": 0.7005,
+      "count": 189.8,
+      "wins_w": 132.3,
+      "parent_wr": 0.7337
+    },
+    "below|120-180|away": {
+      "wr": 0.7983,
+      "count": 1227.2,
+      "wins_w": 979.9,
+      "parent_wr": 0.7875
+    },
+    "far_below|0-60|away": {
+      "wr": 0.95,
+      "count": 1084.8,
+      "wins_w": 1082.0,
+      "parent_wr": 0.95
+    },
+    "far_below|180-240|away": {
+      "wr": 0.8785,
+      "count": 682.9,
+      "wins_w": 600.1,
+      "parent_wr": 0.869
+    },
+    "far_below|120-180|toward": {
+      "wr": 0.9355,
+      "count": 292.2,
+      "wins_w": 273.7,
+      "parent_wr": 0.9177
+    },
+    "at_strike|60-120|away": {
+      "wr": 0.5515,
+      "count": 806.1,
+      "wins_w": 445.0,
+      "parent_wr": 0.5315
+    },
+    "above|180-240|flat": {
+      "wr": 0.5996,
+      "count": 489.8,
+      "wins_w": 292.1,
+      "parent_wr": 0.68
+    },
+    "far_below|0-60|toward": {
+      "wr": 0.95,
+      "count": 569.3,
+      "wins_w": 568.6,
+      "parent_wr": 0.95
+    },
+    "far_above|0-60|flat": {
+      "wr": 0.95,
+      "count": 259.6,
+      "wins_w": 254.9,
+      "parent_wr": 0.95
+    },
+    "below|240-300|away": {
+      "wr": 0.6745,
+      "count": 1256.1,
+      "wins_w": 847.3,
+      "parent_wr": 0.6726
+    },
+    "above|60-120|toward": {
+      "wr": 0.773,
+      "count": 802.5,
+      "wins_w": 620.4,
+      "parent_wr": 0.7704
+    },
+    "below|120-180|flat": {
+      "wr": 0.7977,
+      "count": 274.9,
+      "wins_w": 219.5,
+      "parent_wr": 0.7875
+    },
+    "below|60-120|toward": {
+      "wr": 0.8403,
+      "count": 633.7,
+      "wins_w": 532.3,
+      "parent_wr": 0.8492
+    },
+    "below|120-180|toward": {
+      "wr": 0.7683,
+      "count": 543.0,
+      "wins_w": 416.8,
+      "parent_wr": 0.7875
+    },
+    "near_above|180-240|away": {
+      "wr": 0.6168,
+      "count": 1053.5,
+      "wins_w": 650.2,
+      "parent_wr": 0.5948
+    },
+    "near_above|120-180|toward": {
+      "wr": 0.5653,
+      "count": 648.4,
+      "wins_w": 365.7,
+      "parent_wr": 0.6068
+    },
+    "near_below|60-120|away": {
+      "wr": 0.7463,
+      "count": 663.8,
+      "wins_w": 495.7,
+      "parent_wr": 0.7318
+    },
+    "near_below|60-120|flat": {
+      "wr": 0.7688,
+      "count": 337.6,
+      "wins_w": 260.3,
+      "parent_wr": 0.7318
+    },
+    "below|60-120|flat": {
+      "wr": 0.854,
+      "count": 308.1,
+      "wins_w": 263.2,
+      "parent_wr": 0.8492
+    },
+    "near_below|180-240|toward": {
+      "wr": 0.6168,
+      "count": 470.2,
+      "wins_w": 289.6,
+      "parent_wr": 0.6388
+    },
+    "near_below|0-60|toward": {
+      "wr": 0.7993,
+      "count": 474.3,
+      "wins_w": 379.1,
+      "parent_wr": 0.7987
+    },
+    "near_below|120-180|flat": {
+      "wr": 0.7036,
+      "count": 322.8,
+      "wins_w": 227.5,
+      "parent_wr": 0.6846
+    },
+    "at_strike|0-60|away": {
+      "wr": 0.6493,
+      "count": 696.9,
+      "wins_w": 453.4,
+      "parent_wr": 0.6047
+    },
+    "near_above|60-120|flat": {
+      "wr": 0.6476,
+      "count": 422.7,
+      "wins_w": 273.8,
+      "parent_wr": 0.6439
+    },
+    "near_above|120-180|flat": {
+      "wr": 0.6446,
+      "count": 467.0,
+      "wins_w": 301.8,
+      "parent_wr": 0.6068
+    },
+    "above|120-180|toward": {
+      "wr": 0.6597,
+      "count": 787.4,
+      "wins_w": 518.3,
+      "parent_wr": 0.7156
+    },
+    "far_below|120-180|away": {
+      "wr": 0.9188,
+      "count": 873.9,
+      "wins_w": 803.0,
+      "parent_wr": 0.9177
+    },
+    "above|120-180|flat": {
+      "wr": 0.6859,
+      "count": 477.0,
+      "wins_w": 326.6,
+      "parent_wr": 0.7156
+    },
+    "near_above|0-60|toward": {
+      "wr": 0.6415,
+      "count": 570.5,
+      "wins_w": 365.3,
+      "parent_wr": 0.6753
+    },
+    "near_above|180-240|flat": {
+      "wr": 0.6388,
+      "count": 446.0,
+      "wins_w": 285.8,
+      "parent_wr": 0.5948
+    },
+    "below|0-60|flat": {
+      "wr": 0.9307,
+      "count": 329.4,
+      "wins_w": 306.8,
+      "parent_wr": 0.9191
+    },
+    "far_above|60-120|flat": {
+      "wr": 0.9475,
+      "count": 211.1,
+      "wins_w": 200.0,
+      "parent_wr": 0.9488
+    },
+    "far_above|240-300|away": {
+      "wr": 0.7453,
+      "count": 449.4,
+      "wins_w": 335.1,
+      "parent_wr": 0.7369
+    },
+    "above|0-60|flat": {
+      "wr": 0.8139,
+      "count": 547.7,
+      "wins_w": 445.1,
+      "parent_wr": 0.8465
+    },
+    "near_above|0-60|flat": {
+      "wr": 0.6856,
+      "count": 428.8,
+      "wins_w": 294.2,
+      "parent_wr": 0.6753
+    },
+    "at_strike|240-300|flat": {
+      "wr": 0.5369,
+      "count": 694.2,
+      "wins_w": 372.5,
+      "parent_wr": 0.5465
+    },
+    "near_above|0-60|away": {
+      "wr": 0.7026,
+      "count": 667.7,
+      "wins_w": 469.7,
+      "parent_wr": 0.6753
+    },
+    "near_below|0-60|flat": {
+      "wr": 0.809,
+      "count": 337.2,
+      "wins_w": 273.0,
+      "parent_wr": 0.7987
+    },
+    "below|180-240|toward": {
+      "wr": 0.6768,
+      "count": 350.1,
+      "wins_w": 235.8,
+      "parent_wr": 0.7337
+    },
+    "at_strike|60-120|flat": {
+      "wr": 0.5517,
+      "count": 534.7,
+      "wins_w": 295.4,
+      "parent_wr": 0.5315
+    },
+    "above|60-120|flat": {
+      "wr": 0.7619,
+      "count": 550.7,
+      "wins_w": 419.4,
+      "parent_wr": 0.7704
+    },
+    "far_below|240-300|away": {
+      "wr": 0.7711,
+      "count": 255.0,
+      "wins_w": 197.0,
+      "parent_wr": 0.7527
+    },
+    "far_below|180-240|toward": {
+      "wr": 0.8767,
+      "count": 107.5,
+      "wins_w": 94.4,
+      "parent_wr": 0.869
+    },
+    "at_strike|120-180|flat": {
+      "wr": 0.5379,
+      "count": 592.4,
+      "wins_w": 318.6,
+      "parent_wr": 0.5416
+    },
+    "far_below|60-120|toward": {
+      "wr": 0.95,
+      "count": 420.1,
+      "wins_w": 406.7,
+      "parent_wr": 0.95
+    },
+    "far_above|180-240|toward": {
+      "wr": 0.8483,
+      "count": 175.4,
+      "wins_w": 149.2,
+      "parent_wr": 0.8282
+    },
+    "far_below|120-180|flat": {
+      "wr": 0.9346,
+      "count": 83.1,
+      "wins_w": 78.0,
+      "parent_wr": 0.9177
+    },
+    "far_below|60-120|flat": {
+      "wr": 0.95,
+      "count": 116.9,
+      "wins_w": 113.1,
+      "parent_wr": 0.95
+    },
+    "near_below|180-240|flat": {
+      "wr": 0.6404,
+      "count": 303.5,
+      "wins_w": 194.4,
+      "parent_wr": 0.6388
+    },
+    "at_strike|0-60|flat": {
+      "wr": 0.5995,
+      "count": 518.6,
+      "wins_w": 310.8,
+      "parent_wr": 0.6047
+    },
+    "far_above|120-180|flat": {
+      "wr": 0.887,
+      "count": 146.5,
+      "wins_w": 129.7,
+      "parent_wr": 0.8995
+    },
+    "near_above|240-300|toward": {
+      "wr": 0.3833,
+      "count": 412.1,
+      "wins_w": 154.3,
+      "parent_wr": 0.5663
+    },
+    "above|240-300|flat": {
+      "wr": 0.5771,
+      "count": 291.3,
+      "wins_w": 167.4,
+      "parent_wr": 0.6124
+    },
+    "near_above|240-300|flat": {
+      "wr": 0.5188,
+      "count": 346.5,
+      "wins_w": 178.8,
+      "parent_wr": 0.5663
+    },
+    "at_strike|240-300|toward": {
+      "wr": 0.453,
+      "count": 602.4,
+      "wins_w": 271.0,
+      "parent_wr": 0.5465
+    },
+    "above|240-300|toward": {
+      "wr": 0.4166,
+      "count": 333.0,
+      "wins_w": 134.8,
+      "parent_wr": 0.6124
+    },
+    "near_below|240-300|flat": {
+      "wr": 0.5835,
+      "count": 73.8,
+      "wins_w": 42.7,
+      "parent_wr": 0.6017
+    }
+  },
+  "L3": {
+    "above|240-300|away|above": {
+      "wr": 0.6525,
+      "count": 2058.2,
+      "wins_w": 1342.9,
+      "parent_wr": 0.6521
+    },
+    "far_above|180-240|flat|above": {
+      "wr": 0.8666,
+      "count": 58.9,
+      "wins_w": 51.2,
+      "parent_wr": 0.8589
+    },
+    "far_above|120-180|away|above": {
+      "wr": 0.9193,
+      "count": 1165.3,
+      "wins_w": 1071.3,
+      "parent_wr": 0.919
+    },
+    "far_above|60-120|toward|above": {
+      "wr": 0.9457,
+      "count": 616.7,
+      "wins_w": 583.2,
+      "parent_wr": 0.9458
+    },
+    "above|0-60|toward|above": {
+      "wr": 0.8229,
+      "count": 845.6,
+      "wins_w": 695.8,
+      "parent_wr": 0.8234
+    },
+    "near_above|240-300|away|above": {
+      "wr": 0.6192,
+      "count": 1847.3,
+      "wins_w": 1143.9,
+      "parent_wr": 0.6187
+    },
+    "near_above|180-240|toward|above": {
+      "wr": 0.5298,
+      "count": 648.1,
+      "wins_w": 343.3,
+      "parent_wr": 0.5317
+    },
+    "above|120-180|away|above": {
+      "wr": 0.7572,
+      "count": 1546.1,
+      "wins_w": 1170.7,
+      "parent_wr": 0.7567
+    },
+    "above|60-120|away|above": {
+      "wr": 0.7762,
+      "count": 1408.6,
+      "wins_w": 1093.3,
+      "parent_wr": 0.7761
+    },
+    "above|0-60|away|above": {
+      "wr": 0.8825,
+      "count": 1262.5,
+      "wins_w": 1114.2,
+      "parent_wr": 0.882
+    },
+    "above|180-240|toward|above": {
+      "wr": 0.6764,
+      "count": 643.0,
+      "wins_w": 434.9,
+      "parent_wr": 0.6765
+    },
+    "at_strike|120-180|toward|above": {
+      "wr": 0.5346,
+      "count": 414.6,
+      "wins_w": 221.4,
+      "parent_wr": 0.5465
+    },
+    "below|60-120|away|below": {
+      "wr": 0.8595,
+      "count": 1096.2,
+      "wins_w": 942.2,
+      "parent_wr": 0.8593
+    },
+    "below|0-60|toward|below": {
+      "wr": 0.9155,
+      "count": 679.4,
+      "wins_w": 622.0,
+      "parent_wr": 0.9156
+    },
+    "near_below|240-300|away|below": {
+      "wr": 0.6057,
+      "count": 1887.8,
+      "wins_w": 1143.4,
+      "parent_wr": 0.6056
+    },
+    "at_strike|180-240|toward|above": {
+      "wr": 0.4671,
+      "count": 515.4,
+      "wins_w": 240.0,
+      "parent_wr": 0.5045
+    },
+    "at_strike|120-180|away|above": {
+      "wr": 0.523,
+      "count": 444.8,
+      "wins_w": 232.3,
+      "parent_wr": 0.5405
+    },
+    "near_below|0-60|away|below": {
+      "wr": 0.8021,
+      "count": 594.7,
+      "wins_w": 477.0,
+      "parent_wr": 0.802
+    },
+    "at_strike|240-300|away|above": {
+      "wr": 0.5724,
+      "count": 1214.1,
+      "wins_w": 695.0,
+      "parent_wr": 0.5722
+    },
+    "at_strike|180-240|flat|above": {
+      "wr": 0.5209,
+      "count": 345.4,
+      "wins_w": 179.1,
+      "parent_wr": 0.5617
+    },
+    "near_above|60-120|away|above": {
+      "wr": 0.6784,
+      "count": 717.1,
+      "wins_w": 486.5,
+      "parent_wr": 0.6775
+    },
+    "below|0-60|away|below": {
+      "wr": 0.9262,
+      "count": 954.4,
+      "wins_w": 884.0,
+      "parent_wr": 0.9261
+    },
+    "far_above|0-60|away|above": {
+      "wr": 0.95,
+      "count": 1340.2,
+      "wins_w": 1331.1,
+      "parent_wr": 0.95
+    },
+    "below|180-240|away|below": {
+      "wr": 0.7578,
+      "count": 1350.4,
+      "wins_w": 1023.4,
+      "parent_wr": 0.7575
+    },
+    "at_strike|60-120|toward|below": {
+      "wr": 0.5512,
+      "count": 367.4,
+      "wins_w": 203.6,
+      "parent_wr": 0.4968
+    },
+    "above|180-240|away|above": {
+      "wr": 0.7064,
+      "count": 1776.2,
+      "wins_w": 1254.7,
+      "parent_wr": 0.7061
+    },
+    "far_above|60-120|away|above": {
+      "wr": 0.95,
+      "count": 1240.8,
+      "wins_w": 1188.4,
+      "parent_wr": 0.95
+    },
+    "at_strike|240-300|away|below": {
+      "wr": 0.5724,
+      "count": 1330.1,
+      "wins_w": 761.3,
+      "parent_wr": 0.5722
+    },
+    "at_strike|180-240|toward|below": {
+      "wr": 0.5452,
+      "count": 451.4,
+      "wins_w": 246.9,
+      "parent_wr": 0.5045
+    },
+    "near_below|120-180|away|below": {
+      "wr": 0.7072,
+      "count": 776.0,
+      "wins_w": 548.8,
+      "parent_wr": 0.7066
+    },
+    "far_above|180-240|away|above": {
+      "wr": 0.8284,
+      "count": 959.9,
+      "wins_w": 795.2,
+      "parent_wr": 0.8284
+    },
+    "far_above|0-60|toward|above": {
+      "wr": 0.95,
+      "count": 719.4,
+      "wins_w": 705.2,
+      "parent_wr": 0.95
+    },
+    "near_above|120-180|away|above": {
+      "wr": 0.6199,
+      "count": 872.7,
+      "wins_w": 541.0,
+      "parent_wr": 0.6196
+    },
+    "at_strike|60-120|toward|above": {
+      "wr": 0.4442,
+      "count": 393.9,
+      "wins_w": 173.9,
+      "parent_wr": 0.4968
+    },
+    "at_strike|0-60|toward|above": {
+      "wr": 0.5035,
+      "count": 373.7,
+      "wins_w": 186.9,
+      "parent_wr": 0.5665
+    },
+    "far_above|120-180|toward|above": {
+      "wr": 0.8677,
+      "count": 406.3,
+      "wins_w": 352.5,
+      "parent_wr": 0.8691
+    },
+    "near_above|60-120|toward|above": {
+      "wr": 0.6026,
+      "count": 567.9,
+      "wins_w": 342.2,
+      "parent_wr": 0.604
+    },
+    "near_below|180-240|away|below": {
+      "wr": 0.6519,
+      "count": 994.9,
+      "wins_w": 648.6,
+      "parent_wr": 0.6517
+    },
+    "near_below|120-180|toward|below": {
+      "wr": 0.6447,
+      "count": 510.5,
+      "wins_w": 329.1,
+      "parent_wr": 0.6462
+    },
+    "far_below|60-120|away|below": {
+      "wr": 0.95,
+      "count": 1024.7,
+      "wins_w": 991.4,
+      "parent_wr": 0.95
+    },
+    "far_below|0-60|flat|below": {
+      "wr": 0.95,
+      "count": 170.9,
+      "wins_w": 170.9,
+      "parent_wr": 0.95
+    },
+    "at_strike|180-240|away|below": {
+      "wr": 0.5826,
+      "count": 625.6,
+      "wins_w": 364.6,
+      "parent_wr": 0.5752
+    },
+    "near_below|60-120|toward|below": {
+      "wr": 0.6931,
+      "count": 478.5,
+      "wins_w": 331.6,
+      "parent_wr": 0.6946
+    },
+    "below|180-240|flat|below": {
+      "wr": 0.6974,
+      "count": 189.8,
+      "wins_w": 132.3,
+      "parent_wr": 0.7005
+    },
+    "below|120-180|away|below": {
+      "wr": 0.7985,
+      "count": 1227.2,
+      "wins_w": 979.9,
+      "parent_wr": 0.7983
+    },
+    "far_below|0-60|away|below": {
+      "wr": 0.95,
+      "count": 1084.8,
+      "wins_w": 1082.0,
+      "parent_wr": 0.95
+    },
+    "far_below|180-240|away|below": {
+      "wr": 0.8787,
+      "count": 682.9,
+      "wins_w": 600.1,
+      "parent_wr": 0.8785
+    },
+    "far_below|120-180|toward|below": {
+      "wr": 0.9366,
+      "count": 292.2,
+      "wins_w": 273.7,
+      "parent_wr": 0.9355
+    },
+    "at_strike|180-240|away|above": {
+      "wr": 0.5682,
+      "count": 580.5,
+      "wins_w": 329.7,
+      "parent_wr": 0.5752
+    },
+    "at_strike|60-120|away|below": {
+      "wr": 0.5857,
+      "count": 394.4,
+      "wins_w": 231.7,
+      "parent_wr": 0.5515
+    },
+    "above|180-240|flat|above": {
+      "wr": 0.5965,
+      "count": 489.8,
+      "wins_w": 292.1,
+      "parent_wr": 0.5996
+    },
+    "far_below|0-60|toward|below": {
+      "wr": 0.95,
+      "count": 569.3,
+      "wins_w": 568.6,
+      "parent_wr": 0.95
+    },
+    "far_above|0-60|flat|above": {
+      "wr": 0.95,
+      "count": 259.6,
+      "wins_w": 254.9,
+      "parent_wr": 0.95
+    },
+    "below|240-300|away|below": {
+      "wr": 0.6745,
+      "count": 1256.1,
+      "wins_w": 847.3,
+      "parent_wr": 0.6745
+    },
+    "above|60-120|toward|above": {
+      "wr": 0.7731,
+      "count": 802.5,
+      "wins_w": 620.4,
+      "parent_wr": 0.773
+    },
+    "below|120-180|flat|below": {
+      "wr": 0.7984,
+      "count": 274.9,
+      "wins_w": 219.5,
+      "parent_wr": 0.7977
+    },
+    "below|60-120|toward|below": {
+      "wr": 0.84,
+      "count": 633.7,
+      "wins_w": 532.3,
+      "parent_wr": 0.8403
+    },
+    "below|120-180|toward|below": {
+      "wr": 0.7676,
+      "count": 543.0,
+      "wins_w": 416.8,
+      "parent_wr": 0.7683
+    },
+    "near_above|180-240|away|above": {
+      "wr": 0.6172,
+      "count": 1053.5,
+      "wins_w": 650.2,
+      "parent_wr": 0.6168
+    },
+    "near_above|120-180|toward|above": {
+      "wr": 0.564,
+      "count": 648.4,
+      "wins_w": 365.7,
+      "parent_wr": 0.5653
+    },
+    "at_strike|0-60|toward|below": {
+      "wr": 0.6387,
+      "count": 312.6,
+      "wins_w": 201.1,
+      "parent_wr": 0.5665
+    },
+    "near_below|60-120|away|below": {
+      "wr": 0.7467,
+      "count": 663.8,
+      "wins_w": 495.7,
+      "parent_wr": 0.7463
+    },
+    "near_below|60-120|flat|below": {
+      "wr": 0.7709,
+      "count": 337.6,
+      "wins_w": 260.3,
+      "parent_wr": 0.7688
+    },
+    "below|60-120|flat|below": {
+      "wr": 0.8543,
+      "count": 308.1,
+      "wins_w": 263.2,
+      "parent_wr": 0.854
+    },
+    "near_below|180-240|toward|below": {
+      "wr": 0.6159,
+      "count": 470.2,
+      "wins_w": 289.6,
+      "parent_wr": 0.6168
+    },
+    "near_below|0-60|toward|below": {
+      "wr": 0.7993,
+      "count": 474.3,
+      "wins_w": 379.1,
+      "parent_wr": 0.7993
+    },
+    "near_below|120-180|flat|below": {
+      "wr": 0.7047,
+      "count": 322.8,
+      "wins_w": 227.5,
+      "parent_wr": 0.7036
+    },
+    "at_strike|0-60|away|below": {
+      "wr": 0.7206,
+      "count": 355.1,
+      "wins_w": 257.3,
+      "parent_wr": 0.6493
+    },
+    "near_above|60-120|flat|above": {
+      "wr": 0.6477,
+      "count": 422.7,
+      "wins_w": 273.8,
+      "parent_wr": 0.6476
+    },
+    "near_above|120-180|flat|above": {
+      "wr": 0.6462,
+      "count": 467.0,
+      "wins_w": 301.8,
+      "parent_wr": 0.6446
+    },
+    "above|120-180|toward|above": {
+      "wr": 0.6583,
+      "count": 787.4,
+      "wins_w": 518.3,
+      "parent_wr": 0.6597
+    },
+    "at_strike|180-240|flat|below": {
+      "wr": 0.6087,
+      "count": 303.2,
+      "wins_w": 185.5,
+      "parent_wr": 0.5617
+    },
+    "far_below|120-180|away|below": {
+      "wr": 0.9189,
+      "count": 873.9,
+      "wins_w": 803.0,
+      "parent_wr": 0.9188
+    },
+    "above|120-180|flat|above": {
+      "wr": 0.6847,
+      "count": 477.0,
+      "wins_w": 326.6,
+      "parent_wr": 0.6859
+    },
+    "near_above|0-60|toward|above": {
+      "wr": 0.6404,
+      "count": 570.5,
+      "wins_w": 365.3,
+      "parent_wr": 0.6415
+    },
+    "near_above|180-240|flat|above": {
+      "wr": 0.6407,
+      "count": 446.0,
+      "wins_w": 285.8,
+      "parent_wr": 0.6388
+    },
+    "below|0-60|flat|below": {
+      "wr": 0.9314,
+      "count": 329.4,
+      "wins_w": 306.8,
+      "parent_wr": 0.9307
+    },
+    "far_above|60-120|flat|above": {
+      "wr": 0.9474,
+      "count": 211.1,
+      "wins_w": 200.0,
+      "parent_wr": 0.9475
+    },
+    "far_above|240-300|away|above": {
+      "wr": 0.7456,
+      "count": 449.4,
+      "wins_w": 335.1,
+      "parent_wr": 0.7453
+    },
+    "above|0-60|flat|above": {
+      "wr": 0.8127,
+      "count": 547.7,
+      "wins_w": 445.1,
+      "parent_wr": 0.8139
+    },
+    "near_above|0-60|flat|above": {
+      "wr": 0.6861,
+      "count": 428.8,
+      "wins_w": 294.2,
+      "parent_wr": 0.6856
+    },
+    "at_strike|240-300|flat|above": {
+      "wr": 0.5342,
+      "count": 318.5,
+      "wins_w": 170.1,
+      "parent_wr": 0.5369
+    },
+    "near_above|0-60|away|above": {
+      "wr": 0.7034,
+      "count": 667.7,
+      "wins_w": 469.7,
+      "parent_wr": 0.7026
+    },
+    "at_strike|120-180|toward|below": {
+      "wr": 0.56,
+      "count": 372.2,
+      "wins_w": 208.7,
+      "parent_wr": 0.5465
+    },
+    "near_below|0-60|flat|below": {
+      "wr": 0.8096,
+      "count": 337.2,
+      "wins_w": 273.0,
+      "parent_wr": 0.809
+    },
+    "below|180-240|toward|below": {
+      "wr": 0.6737,
+      "count": 350.1,
+      "wins_w": 235.8,
+      "parent_wr": 0.6768
+    },
+    "at_strike|60-120|flat|above": {
+      "wr": 0.5222,
+      "count": 265.6,
+      "wins_w": 138.1,
+      "parent_wr": 0.5517
+    },
+    "above|60-120|flat|above": {
+      "wr": 0.7616,
+      "count": 550.7,
+      "wins_w": 419.4,
+      "parent_wr": 0.7619
+    },
+    "at_strike|0-60|away|above": {
+      "wr": 0.5779,
+      "count": 341.8,
+      "wins_w": 196.1,
+      "parent_wr": 0.6493
+    },
+    "at_strike|120-180|away|below": {
+      "wr": 0.5585,
+      "count": 428.7,
+      "wins_w": 239.8,
+      "parent_wr": 0.5405
+    },
+    "at_strike|240-300|flat|below": {
+      "wr": 0.5386,
+      "count": 375.7,
+      "wins_w": 202.4,
+      "parent_wr": 0.5369
+    },
+    "far_below|240-300|away|below": {
+      "wr": 0.7724,
+      "count": 255.0,
+      "wins_w": 197.0,
+      "parent_wr": 0.7711
+    },
+    "far_below|180-240|toward|below": {
+      "wr": 0.8779,
+      "count": 107.5,
+      "wins_w": 94.4,
+      "parent_wr": 0.8767
+    },
+    "at_strike|120-180|flat|above": {
+      "wr": 0.5134,
+      "count": 298.6,
+      "wins_w": 152.8,
+      "parent_wr": 0.5379
+    },
+    "at_strike|60-120|flat|below": {
+      "wr": 0.5823,
+      "count": 269.1,
+      "wins_w": 157.3,
+      "parent_wr": 0.5517
+    },
+    "far_below|60-120|toward|below": {
+      "wr": 0.95,
+      "count": 420.1,
+      "wins_w": 406.7,
+      "parent_wr": 0.95
+    },
+    "far_above|180-240|toward|above": {
+      "wr": 0.8504,
+      "count": 175.4,
+      "wins_w": 149.2,
+      "parent_wr": 0.8483
+    },
+    "far_below|120-180|flat|below": {
+      "wr": 0.9378,
+      "count": 83.1,
+      "wins_w": 78.0,
+      "parent_wr": 0.9346
+    },
+    "far_below|60-120|flat|below": {
+      "wr": 0.95,
+      "count": 116.9,
+      "wins_w": 113.1,
+      "parent_wr": 0.95
+    },
+    "near_below|180-240|flat|below": {
+      "wr": 0.6405,
+      "count": 303.5,
+      "wins_w": 194.4,
+      "parent_wr": 0.6404
+    },
+    "at_strike|60-120|away|above": {
+      "wr": 0.5196,
+      "count": 411.7,
+      "wins_w": 213.3,
+      "parent_wr": 0.5515
+    },
+    "at_strike|120-180|flat|below": {
+      "wr": 0.5626,
+      "count": 293.8,
+      "wins_w": 165.8,
+      "parent_wr": 0.5379
+    },
+    "at_strike|0-60|flat|below": {
+      "wr": 0.6643,
+      "count": 239.2,
+      "wins_w": 160.2,
+      "parent_wr": 0.5995
+    },
+    "at_strike|0-60|flat|above": {
+      "wr": 0.5431,
+      "count": 279.4,
+      "wins_w": 150.6,
+      "parent_wr": 0.5995
+    },
+    "far_above|120-180|flat|above": {
+      "wr": 0.8855,
+      "count": 146.5,
+      "wins_w": 129.7,
+      "parent_wr": 0.887
+    },
+    "near_above|240-300|toward|above": {
+      "wr": 0.3748,
+      "count": 412.1,
+      "wins_w": 154.3,
+      "parent_wr": 0.3833
+    },
+    "above|240-300|flat|above": {
+      "wr": 0.5748,
+      "count": 291.3,
+      "wins_w": 167.4,
+      "parent_wr": 0.5771
+    },
+    "near_above|240-300|flat|above": {
+      "wr": 0.5162,
+      "count": 346.5,
+      "wins_w": 178.8,
+      "parent_wr": 0.5188
+    },
+    "at_strike|240-300|toward|above": {
+      "wr": 0.4315,
+      "count": 401.0,
+      "wins_w": 172.6,
+      "parent_wr": 0.453
+    },
+    "above|240-300|toward|above": {
+      "wr": 0.4055,
+      "count": 333.0,
+      "wins_w": 134.8,
+      "parent_wr": 0.4166
+    },
+    "near_below|240-300|flat|below": {
+      "wr": 0.5796,
+      "count": 73.8,
+      "wins_w": 42.7,
+      "parent_wr": 0.5835
+    },
+    "at_strike|240-300|toward|below": {
+      "wr": 0.4854,
+      "count": 201.4,
+      "wins_w": 98.4,
+      "parent_wr": 0.453
+    }
+  },
+  "L4": {
+    "above|240-300|away|above|mid_vol": {
+      "wr": 0.6404,
+      "count": 638.7,
+      "wins_w": 408.8,
+      "parent_wr": 0.6525
+    },
+    "far_above|120-180|away|above|mid_vol": {
+      "wr": 0.9297,
+      "count": 334.5,
+      "wins_w": 311.2,
+      "parent_wr": 0.9193
+    },
+    "far_above|60-120|toward|above|mid_vol": {
+      "wr": 0.9489,
+      "count": 171.5,
+      "wins_w": 162.8,
+      "parent_wr": 0.9457
+    },
+    "above|0-60|toward|above|mid_vol": {
+      "wr": 0.8324,
+      "count": 270.8,
+      "wins_w": 225.6,
+      "parent_wr": 0.8229
+    },
+    "near_above|240-300|away|above|mid_vol": {
+      "wr": 0.6188,
+      "count": 627.5,
+      "wins_w": 388.3,
+      "parent_wr": 0.6192
+    },
+    "near_above|180-240|toward|above|mid_vol": {
+      "wr": 0.5444,
+      "count": 251.3,
+      "wins_w": 137.1,
+      "parent_wr": 0.5298
+    },
+    "above|120-180|away|above|mid_vol": {
+      "wr": 0.7578,
+      "count": 489.8,
+      "wins_w": 371.2,
+      "parent_wr": 0.7572
+    },
+    "above|60-120|away|above|mid_vol": {
+      "wr": 0.7691,
+      "count": 480.5,
+      "wins_w": 369.4,
+      "parent_wr": 0.7762
+    },
+    "above|0-60|away|above|mid_vol": {
+      "wr": 0.8875,
+      "count": 436.6,
+      "wins_w": 387.6,
+      "parent_wr": 0.8825
+    },
+    "above|180-240|toward|above|mid_vol": {
+      "wr": 0.6828,
+      "count": 194.3,
+      "wins_w": 132.8,
+      "parent_wr": 0.6764
+    },
+    "at_strike|120-180|toward|above|mid_vol": {
+      "wr": 0.4773,
+      "count": 143.0,
+      "wins_w": 67.1,
+      "parent_wr": 0.5346
+    },
+    "below|60-120|away|below|mid_vol": {
+      "wr": 0.848,
+      "count": 388.0,
+      "wins_w": 328.8,
+      "parent_wr": 0.8595
+    },
+    "below|0-60|toward|below|mid_vol": {
+      "wr": 0.9036,
+      "count": 270.3,
+      "wins_w": 244.0,
+      "parent_wr": 0.9155
+    },
+    "near_below|240-300|away|below|mid_vol": {
+      "wr": 0.6053,
+      "count": 630.8,
+      "wins_w": 381.8,
+      "parent_wr": 0.6057
+    },
+    "at_strike|180-240|toward|above|mid_vol": {
+      "wr": 0.4653,
+      "count": 169.2,
+      "wins_w": 78.7,
+      "parent_wr": 0.4671
+    },
+    "at_strike|120-180|away|above|mid_vol": {
+      "wr": 0.5394,
+      "count": 133.8,
+      "wins_w": 72.5,
+      "parent_wr": 0.523
+    },
+    "near_below|0-60|away|below|mid_vol": {
+      "wr": 0.7943,
+      "count": 189.3,
+      "wins_w": 150.2,
+      "parent_wr": 0.8021
+    },
+    "at_strike|240-300|away|above|mid_vol": {
+      "wr": 0.5551,
+      "count": 368.7,
+      "wins_w": 204.3,
+      "parent_wr": 0.5724
+    },
+    "at_strike|180-240|flat|above|mid_vol": {
+      "wr": 0.498,
+      "count": 71.8,
+      "wins_w": 35.3,
+      "parent_wr": 0.5209
+    },
+    "near_above|60-120|away|above|mid_vol": {
+      "wr": 0.6307,
+      "count": 231.9,
+      "wins_w": 145.3,
+      "parent_wr": 0.6784
+    },
+    "below|0-60|away|below|mid_vol": {
+      "wr": 0.8954,
+      "count": 326.7,
+      "wins_w": 291.9,
+      "parent_wr": 0.9262
+    },
+    "far_above|0-60|away|above|mid_vol": {
+      "wr": 0.95,
+      "count": 421.2,
+      "wins_w": 417.5,
+      "parent_wr": 0.95
+    },
+    "below|180-240|away|below|mid_vol": {
+      "wr": 0.7569,
+      "count": 478.3,
+      "wins_w": 362.0,
+      "parent_wr": 0.7578
+    },
+    "at_strike|60-120|toward|below|mid_vol": {
+      "wr": 0.5538,
+      "count": 109.7,
+      "wins_w": 60.8,
+      "parent_wr": 0.5512
+    },
+    "above|180-240|away|above|mid_vol": {
+      "wr": 0.7116,
+      "count": 573.9,
+      "wins_w": 408.5,
+      "parent_wr": 0.7064
+    },
+    "far_above|60-120|away|above|mid_vol": {
+      "wr": 0.95,
+      "count": 386.9,
+      "wins_w": 368.9,
+      "parent_wr": 0.95
+    },
+    "at_strike|240-300|away|below|mid_vol": {
+      "wr": 0.5584,
+      "count": 434.6,
+      "wins_w": 242.4,
+      "parent_wr": 0.5724
+    },
+    "at_strike|180-240|toward|below|mid_vol": {
+      "wr": 0.5663,
+      "count": 150.6,
+      "wins_w": 85.7,
+      "parent_wr": 0.5452
+    },
+    "near_below|120-180|away|below|mid_vol": {
+      "wr": 0.6795,
+      "count": 253.2,
+      "wins_w": 171.5,
+      "parent_wr": 0.7072
+    },
+    "far_above|180-240|away|above|mid_vol": {
+      "wr": 0.8212,
+      "count": 278.9,
+      "wins_w": 228.9,
+      "parent_wr": 0.8284
+    },
+    "far_above|0-60|toward|above|mid_vol": {
+      "wr": 0.95,
+      "count": 214.8,
+      "wins_w": 209.4,
+      "parent_wr": 0.95
+    },
+    "near_above|240-300|away|above|high_vol": {
+      "wr": 0.5878,
+      "count": 516.0,
+      "wins_w": 302.7,
+      "parent_wr": 0.6192
+    },
+    "near_above|180-240|toward|above|high_vol": {
+      "wr": 0.5085,
+      "count": 172.9,
+      "wins_w": 87.5,
+      "parent_wr": 0.5298
+    },
+    "near_above|120-180|away|above|high_vol": {
+      "wr": 0.6028,
+      "count": 197.8,
+      "wins_w": 118.9,
+      "parent_wr": 0.6199
+    },
+    "at_strike|60-120|toward|above|high_vol": {
+      "wr": 0.4626,
+      "count": 95.4,
+      "wins_w": 44.5,
+      "parent_wr": 0.4442
+    },
+    "at_strike|0-60|toward|above|high_vol": {
+      "wr": 0.4852,
+      "count": 90.4,
+      "wins_w": 43.5,
+      "parent_wr": 0.5035
+    },
+    "near_below|240-300|away|below|high_vol": {
+      "wr": 0.5577,
+      "count": 540.4,
+      "wins_w": 300.4,
+      "parent_wr": 0.6057
+    },
+    "above|180-240|away|above|high_vol": {
+      "wr": 0.676,
+      "count": 553.7,
+      "wins_w": 373.7,
+      "parent_wr": 0.7064
+    },
+    "far_above|120-180|toward|above|high_vol": {
+      "wr": 0.8526,
+      "count": 208.3,
+      "wins_w": 177.3,
+      "parent_wr": 0.8677
+    },
+    "far_above|60-120|toward|above|high_vol": {
+      "wr": 0.9469,
+      "count": 322.5,
+      "wins_w": 305.4,
+      "parent_wr": 0.9457
+    },
+    "far_above|0-60|toward|above|high_vol": {
+      "wr": 0.95,
+      "count": 362.8,
+      "wins_w": 359.0,
+      "parent_wr": 0.95
+    },
+    "at_strike|240-300|away|above|high_vol": {
+      "wr": 0.5527,
+      "count": 296.0,
+      "wins_w": 163.2,
+      "parent_wr": 0.5724
+    },
+    "above|120-180|away|above|high_vol": {
+      "wr": 0.7544,
+      "count": 466.7,
+      "wins_w": 352.0,
+      "parent_wr": 0.7572
+    },
+    "near_above|60-120|toward|above|high_vol": {
+      "wr": 0.6293,
+      "count": 132.8,
+      "wins_w": 84.1,
+      "parent_wr": 0.6026
+    },
+    "below|0-60|away|below|high_vol": {
+      "wr": 0.9191,
+      "count": 304.6,
+      "wins_w": 279.8,
+      "parent_wr": 0.9262
+    },
+    "near_below|180-240|away|below|high_vol": {
+      "wr": 0.5679,
+      "count": 250.0,
+      "wins_w": 140.3,
+      "parent_wr": 0.6519
+    },
+    "near_below|120-180|toward|below|high_vol": {
+      "wr": 0.6109,
+      "count": 144.0,
+      "wins_w": 87.3,
+      "parent_wr": 0.6447
+    },
+    "far_below|60-120|away|below|high_vol": {
+      "wr": 0.95,
+      "count": 522.0,
+      "wins_w": 502.4,
+      "parent_wr": 0.95
+    },
+    "far_below|0-60|flat|below|high_vol": {
+      "wr": 0.95,
+      "count": 66.7,
+      "wins_w": 66.7,
+      "parent_wr": 0.95
+    },
+    "at_strike|180-240|away|below|high_vol": {
+      "wr": 0.5964,
+      "count": 141.9,
+      "wins_w": 84.9,
+      "parent_wr": 0.5826
+    },
+    "near_below|120-180|away|below|high_vol": {
+      "wr": 0.7046,
+      "count": 179.6,
+      "wins_w": 126.5,
+      "parent_wr": 0.7072
+    },
+    "near_below|60-120|toward|below|high_vol": {
+      "wr": 0.6287,
+      "count": 138.2,
+      "wins_w": 85.6,
+      "parent_wr": 0.6931
+    },
+    "far_above|120-180|away|above|high_vol": {
+      "wr": 0.8993,
+      "count": 584.8,
+      "wins_w": 525.5,
+      "parent_wr": 0.9193
+    },
+    "above|60-120|away|above|high_vol": {
+      "wr": 0.7672,
+      "count": 348.9,
+      "wins_w": 267.5,
+      "parent_wr": 0.7762
+    },
+    "above|0-60|away|above|high_vol": {
+      "wr": 0.8917,
+      "count": 326.6,
+      "wins_w": 291.4,
+      "parent_wr": 0.8825
+    },
+    "below|180-240|flat|below|high_vol": {
+      "wr": 0.6471,
+      "count": 52.4,
+      "wins_w": 32.9,
+      "parent_wr": 0.6974
+    },
+    "below|120-180|away|below|high_vol": {
+      "wr": 0.7523,
+      "count": 375.7,
+      "wins_w": 281.7,
+      "parent_wr": 0.7985
+    },
+    "below|60-120|away|below|high_vol": {
+      "wr": 0.8175,
+      "count": 335.2,
+      "wins_w": 273.2,
+      "parent_wr": 0.8595
+    },
+    "far_below|0-60|away|below|high_vol": {
+      "wr": 0.95,
+      "count": 534.3,
+      "wins_w": 532.9,
+      "parent_wr": 0.95
+    },
+    "above|240-300|away|above|high_vol": {
+      "wr": 0.6453,
+      "count": 774.1,
+      "wins_w": 499.4,
+      "parent_wr": 0.6525
+    },
+    "at_strike|180-240|toward|below|high_vol": {
+      "wr": 0.4737,
+      "count": 112.8,
+      "wins_w": 52.0,
+      "parent_wr": 0.5452
+    },
+    "far_above|0-60|away|above|high_vol": {
+      "wr": 0.95,
+      "count": 598.1,
+      "wins_w": 595.7,
+      "parent_wr": 0.95
+    },
+    "far_below|180-240|away|below|high_vol": {
+      "wr": 0.8602,
+      "count": 402.9,
+      "wins_w": 346.2,
+      "parent_wr": 0.8787
+    },
+    "far_below|120-180|toward|below|high_vol": {
+      "wr": 0.9113,
+      "count": 161.1,
+      "wins_w": 146.3,
+      "parent_wr": 0.9366
+    },
+    "at_strike|180-240|away|above|high_vol": {
+      "wr": 0.5649,
+      "count": 131.3,
+      "wins_w": 74.1,
+      "parent_wr": 0.5682
+    },
+    "at_strike|120-180|away|above|high_vol": {
+      "wr": 0.4853,
+      "count": 105.0,
+      "wins_w": 50.2,
+      "parent_wr": 0.523
+    },
+    "at_strike|60-120|away|below|high_vol": {
+      "wr": 0.5862,
+      "count": 100.8,
+      "wins_w": 59.1,
+      "parent_wr": 0.5857
+    },
+    "above|180-240|flat|above|high_vol": {
+      "wr": 0.5913,
+      "count": 66.3,
+      "wins_w": 39.1,
+      "parent_wr": 0.5965
+    },
+    "far_above|60-120|away|above|high_vol": {
+      "wr": 0.95,
+      "count": 579.0,
+      "wins_w": 554.0,
+      "parent_wr": 0.95
+    },
+    "below|180-240|away|below|high_vol": {
+      "wr": 0.7204,
+      "count": 491.3,
+      "wins_w": 353.2,
+      "parent_wr": 0.7578
+    },
+    "far_below|0-60|toward|below|high_vol": {
+      "wr": 0.95,
+      "count": 308.5,
+      "wins_w": 308.5,
+      "parent_wr": 0.95
+    },
+    "far_above|0-60|flat|above|high_vol": {
+      "wr": 0.95,
+      "count": 76.3,
+      "wins_w": 75.6,
+      "parent_wr": 0.95
+    },
+    "below|240-300|away|below|high_vol": {
+      "wr": 0.639,
+      "count": 634.3,
+      "wins_w": 404.6,
+      "parent_wr": 0.6745
+    },
+    "above|60-120|toward|above|mid_vol": {
+      "wr": 0.7903,
+      "count": 269.6,
+      "wins_w": 213.4,
+      "parent_wr": 0.7731
+    },
+    "below|120-180|flat|below|mid_vol": {
+      "wr": 0.799,
+      "count": 93.1,
+      "wins_w": 74.4,
+      "parent_wr": 0.7984
+    },
+    "below|60-120|toward|below|mid_vol": {
+      "wr": 0.8502,
+      "count": 210.3,
+      "wins_w": 179.0,
+      "parent_wr": 0.84
+    },
+    "below|120-180|toward|below|mid_vol": {
+      "wr": 0.7746,
+      "count": 187.4,
+      "wins_w": 145.3,
+      "parent_wr": 0.7676
+    },
+    "far_below|60-120|away|below|mid_vol": {
+      "wr": 0.95,
+      "count": 318.9,
+      "wins_w": 307.9,
+      "parent_wr": 0.95
+    },
+    "far_below|0-60|away|below|mid_vol": {
+      "wr": 0.95,
+      "count": 339.3,
+      "wins_w": 337.9,
+      "parent_wr": 0.95
+    },
+    "below|240-300|away|below|mid_vol": {
+      "wr": 0.7139,
+      "count": 385.2,
+      "wins_w": 275.8,
+      "parent_wr": 0.6745
+    },
+    "far_below|180-240|away|below|mid_vol": {
+      "wr": 0.894,
+      "count": 198.1,
+      "wins_w": 177.4,
+      "parent_wr": 0.8787
+    },
+    "far_below|120-180|toward|below|mid_vol": {
+      "wr": 0.95,
+      "count": 98.2,
+      "wins_w": 95.5,
+      "parent_wr": 0.9366
+    },
+    "near_above|60-120|away|above|high_vol": {
+      "wr": 0.647,
+      "count": 151.2,
+      "wins_w": 97.2,
+      "parent_wr": 0.6784
+    },
+    "above|0-60|toward|above|high_vol": {
+      "wr": 0.8614,
+      "count": 257.4,
+      "wins_w": 222.5,
+      "parent_wr": 0.8229
+    },
+    "at_strike|240-300|away|below|high_vol": {
+      "wr": 0.5397,
+      "count": 329.2,
+      "wins_w": 177.0,
+      "parent_wr": 0.5724
+    },
+    "below|0-60|toward|below|high_vol": {
+      "wr": 0.895,
+      "count": 212.3,
+      "wins_w": 189.6,
+      "parent_wr": 0.9155
+    },
+    "near_above|180-240|away|above|mid_vol": {
+      "wr": 0.5581,
+      "count": 313.0,
+      "wins_w": 173.5,
+      "parent_wr": 0.6172
+    },
+    "near_above|120-180|toward|above|mid_vol": {
+      "wr": 0.5631,
+      "count": 211.0,
+      "wins_w": 118.8,
+      "parent_wr": 0.564
+    },
+    "at_strike|60-120|away|below|mid_vol": {
+      "wr": 0.5802,
+      "count": 117.4,
+      "wins_w": 68.0,
+      "parent_wr": 0.5857
+    },
+    "at_strike|0-60|toward|below|mid_vol": {
+      "wr": 0.6794,
+      "count": 103.9,
+      "wins_w": 71.4,
+      "parent_wr": 0.6387
+    },
+    "near_below|60-120|away|below|mid_vol": {
+      "wr": 0.7614,
+      "count": 202.8,
+      "wins_w": 154.7,
+      "parent_wr": 0.7467
+    },
+    "near_below|120-180|toward|below|mid_vol": {
+      "wr": 0.6295,
+      "count": 163.0,
+      "wins_w": 102.3,
+      "parent_wr": 0.6447
+    },
+    "near_below|60-120|flat|below|mid_vol": {
+      "wr": 0.7449,
+      "count": 89.3,
+      "wins_w": 66.0,
+      "parent_wr": 0.7709
+    },
+    "below|60-120|flat|below|mid_vol": {
+      "wr": 0.8478,
+      "count": 102.3,
+      "wins_w": 86.6,
+      "parent_wr": 0.8543
+    },
+    "near_below|180-240|toward|below|mid_vol": {
+      "wr": 0.5812,
+      "count": 163.1,
+      "wins_w": 94.1,
+      "parent_wr": 0.6159
+    },
+    "near_below|0-60|toward|below|mid_vol": {
+      "wr": 0.8294,
+      "count": 148.9,
+      "wins_w": 124.1,
+      "parent_wr": 0.7993
+    },
+    "near_below|180-240|away|below|mid_vol": {
+      "wr": 0.6231,
+      "count": 321.4,
+      "wins_w": 199.7,
+      "parent_wr": 0.6519
+    },
+    "near_below|120-180|flat|below|mid_vol": {
+      "wr": 0.677,
+      "count": 86.2,
+      "wins_w": 57.8,
+      "parent_wr": 0.7047
+    },
+    "at_strike|0-60|away|below|mid_vol": {
+      "wr": 0.7679,
+      "count": 114.8,
+      "wins_w": 89.1,
+      "parent_wr": 0.7206
+    },
+    "at_strike|180-240|away|above|mid_vol": {
+      "wr": 0.5385,
+      "count": 184.4,
+      "wins_w": 98.7,
+      "parent_wr": 0.5682
+    },
+    "near_above|120-180|away|above|mid_vol": {
+      "wr": 0.5638,
+      "count": 297.3,
+      "wins_w": 166.5,
+      "parent_wr": 0.6199
+    },
+    "near_above|60-120|flat|above|mid_vol": {
+      "wr": 0.6784,
+      "count": 84.3,
+      "wins_w": 57.8,
+      "parent_wr": 0.6477
+    },
+    "near_above|120-180|flat|above|mid_vol": {
+      "wr": 0.6539,
+      "count": 100.4,
+      "wins_w": 65.8,
+      "parent_wr": 0.6462
+    },
+    "near_below|240-300|away|below|low_vol": {
+      "wr": 0.6426,
+      "count": 716.6,
+      "wins_w": 461.2,
+      "parent_wr": 0.6057
+    },
+    "below|180-240|away|below|low_vol": {
+      "wr": 0.8068,
+      "count": 380.8,
+      "wins_w": 308.2,
+      "parent_wr": 0.7578
+    },
+    "below|120-180|toward|below|low_vol": {
+      "wr": 0.8298,
+      "count": 136.6,
+      "wins_w": 114.6,
+      "parent_wr": 0.7676
+    },
+    "at_strike|60-120|toward|below|low_vol": {
+      "wr": 0.5697,
+      "count": 176.8,
+      "wins_w": 101.1,
+      "parent_wr": 0.5512
+    },
+    "at_strike|0-60|away|below|low_vol": {
+      "wr": 0.7448,
+      "count": 164.5,
+      "wins_w": 123.0,
+      "parent_wr": 0.7206
+    },
+    "at_strike|180-240|away|below|mid_vol": {
+      "wr": 0.5867,
+      "count": 197.4,
+      "wins_w": 115.9,
+      "parent_wr": 0.5826
+    },
+    "above|120-180|toward|above|mid_vol": {
+      "wr": 0.6619,
+      "count": 280.6,
+      "wins_w": 185.8,
+      "parent_wr": 0.6583
+    },
+    "at_strike|180-240|flat|below|mid_vol": {
+      "wr": 0.6485,
+      "count": 62.3,
+      "wins_w": 41.2,
+      "parent_wr": 0.6087
+    },
+    "far_below|120-180|away|below|mid_vol": {
+      "wr": 0.9276,
+      "count": 244.0,
+      "wins_w": 226.5,
+      "parent_wr": 0.9189
+    },
+    "far_below|0-60|toward|below|mid_vol": {
+      "wr": 0.95,
+      "count": 161.7,
+      "wins_w": 161.0,
+      "parent_wr": 0.95
+    },
+    "below|120-180|away|below|mid_vol": {
+      "wr": 0.8059,
+      "count": 425.7,
+      "wins_w": 343.2,
+      "parent_wr": 0.7985
+    },
+    "far_below|0-60|flat|below|mid_vol": {
+      "wr": 0.95,
+      "count": 62.9,
+      "wins_w": 62.9,
+      "parent_wr": 0.95
+    },
+    "above|120-180|flat|above|mid_vol": {
+      "wr": 0.6873,
+      "count": 130.0,
+      "wins_w": 89.4,
+      "parent_wr": 0.6847
+    },
+    "near_above|0-60|toward|above|mid_vol": {
+      "wr": 0.5856,
+      "count": 179.8,
+      "wins_w": 104.2,
+      "parent_wr": 0.6404
+    },
+    "near_above|180-240|flat|above|high_vol": {
+      "wr": 0.698,
+      "count": 56.1,
+      "wins_w": 40.3,
+      "parent_wr": 0.6407
+    },
+    "near_below|0-60|toward|below|high_vol": {
+      "wr": 0.7362,
+      "count": 135.1,
+      "wins_w": 98.2,
+      "parent_wr": 0.7993
+    },
+    "far_below|120-180|away|below|high_vol": {
+      "wr": 0.9,
+      "count": 490.3,
+      "wins_w": 440.9,
+      "parent_wr": 0.9189
+    },
+    "far_above|120-180|toward|above|mid_vol": {
+      "wr": 0.8842,
+      "count": 122.0,
+      "wins_w": 108.2,
+      "parent_wr": 0.8677
+    },
+    "far_above|0-60|flat|above|mid_vol": {
+      "wr": 0.95,
+      "count": 85.6,
+      "wins_w": 84.6,
+      "parent_wr": 0.95
+    },
+    "above|180-240|toward|above|high_vol": {
+      "wr": 0.7015,
+      "count": 237.2,
+      "wins_w": 166.9,
+      "parent_wr": 0.6764
+    },
+    "far_above|60-120|flat|above|high_vol": {
+      "wr": 0.9413,
+      "count": 72.9,
+      "wins_w": 68.5,
+      "parent_wr": 0.9474
+    },
+    "far_above|240-300|away|above|high_vol": {
+      "wr": 0.752,
+      "count": 252.9,
+      "wins_w": 190.3,
+      "parent_wr": 0.7456
+    },
+    "above|0-60|flat|above|high_vol": {
+      "wr": 0.8387,
+      "count": 70.8,
+      "wins_w": 59.9,
+      "parent_wr": 0.8127
+    },
+    "near_above|180-240|away|above|high_vol": {
+      "wr": 0.5765,
+      "count": 258.5,
+      "wins_w": 148.2,
+      "parent_wr": 0.6172
+    },
+    "at_strike|240-300|flat|above|mid_vol": {
+      "wr": 0.5239,
+      "count": 77.5,
+      "wins_w": 40.4,
+      "parent_wr": 0.5342
+    },
+    "near_above|0-60|away|above|mid_vol": {
+      "wr": 0.6828,
+      "count": 195.1,
+      "wins_w": 132.8,
+      "parent_wr": 0.7034
+    },
+    "above|180-240|flat|above|mid_vol": {
+      "wr": 0.655,
+      "count": 126.3,
+      "wins_w": 83.9,
+      "parent_wr": 0.5965
+    },
+    "near_below|60-120|toward|below|mid_vol": {
+      "wr": 0.6989,
+      "count": 168.1,
+      "wins_w": 117.6,
+      "parent_wr": 0.6931
+    },
+    "at_strike|120-180|toward|below|mid_vol": {
+      "wr": 0.5478,
+      "count": 132.6,
+      "wins_w": 72.4,
+      "parent_wr": 0.56
+    },
+    "near_below|0-60|flat|below|mid_vol": {
+      "wr": 0.8583,
+      "count": 72.5,
+      "wins_w": 63.2,
+      "parent_wr": 0.8096
+    },
+    "at_strike|60-120|toward|above|mid_vol": {
+      "wr": 0.4361,
+      "count": 115.7,
+      "wins_w": 50.3,
+      "parent_wr": 0.4442
+    },
+    "near_above|60-120|toward|above|mid_vol": {
+      "wr": 0.6164,
+      "count": 196.0,
+      "wins_w": 121.1,
+      "parent_wr": 0.6026
+    },
+    "at_strike|0-60|toward|above|mid_vol": {
+      "wr": 0.5181,
+      "count": 122.0,
+      "wins_w": 63.5,
+      "parent_wr": 0.5035
+    },
+    "below|180-240|toward|below|mid_vol": {
+      "wr": 0.7029,
+      "count": 109.0,
+      "wins_w": 77.2,
+      "parent_wr": 0.6737
+    },
+    "at_strike|60-120|flat|above|mid_vol": {
+      "wr": 0.4871,
+      "count": 54.2,
+      "wins_w": 25.7,
+      "parent_wr": 0.5222
+    },
+    "near_above|0-60|flat|above|mid_vol": {
+      "wr": 0.6563,
+      "count": 90.8,
+      "wins_w": 59.0,
+      "parent_wr": 0.6861
+    },
+    "at_strike|240-300|away|above|low_vol": {
+      "wr": 0.5953,
+      "count": 549.4,
+      "wins_w": 327.5,
+      "parent_wr": 0.5724
+    },
+    "far_above|180-240|away|above|low_vol": {
+      "wr": 0.853,
+      "count": 185.7,
+      "wins_w": 158.9,
+      "parent_wr": 0.8284
+    },
+    "far_above|120-180|away|above|low_vol": {
+      "wr": 0.95,
+      "count": 246.0,
+      "wins_w": 234.6,
+      "parent_wr": 0.9193
+    },
+    "above|60-120|toward|above|low_vol": {
+      "wr": 0.764,
+      "count": 270.8,
+      "wins_w": 206.7,
+      "parent_wr": 0.7731
+    },
+    "far_above|0-60|away|above|low_vol": {
+      "wr": 0.95,
+      "count": 320.9,
+      "wins_w": 317.9,
+      "parent_wr": 0.95
+    },
+    "above|240-300|away|above|low_vol": {
+      "wr": 0.6729,
+      "count": 645.4,
+      "wins_w": 434.7,
+      "parent_wr": 0.6525
+    },
+    "above|180-240|away|above|low_vol": {
+      "wr": 0.7278,
+      "count": 648.6,
+      "wins_w": 472.5,
+      "parent_wr": 0.7064
+    },
+    "above|0-60|toward|above|low_vol": {
+      "wr": 0.7829,
+      "count": 317.4,
+      "wins_w": 247.7,
+      "parent_wr": 0.8229
+    },
+    "above|120-180|away|above|low_vol": {
+      "wr": 0.7589,
+      "count": 589.6,
+      "wins_w": 447.5,
+      "parent_wr": 0.7572
+    },
+    "above|60-120|away|above|low_vol": {
+      "wr": 0.7876,
+      "count": 579.2,
+      "wins_w": 456.4,
+      "parent_wr": 0.7762
+    },
+    "above|0-60|flat|above|low_vol": {
+      "wr": 0.7945,
+      "count": 326.7,
+      "wins_w": 259.2,
+      "parent_wr": 0.8127
+    },
+    "at_strike|180-240|toward|below|low_vol": {
+      "wr": 0.5774,
+      "count": 188.0,
+      "wins_w": 109.2,
+      "parent_wr": 0.5452
+    },
+    "at_strike|120-180|away|above|low_vol": {
+      "wr": 0.5312,
+      "count": 206.0,
+      "wins_w": 109.6,
+      "parent_wr": 0.523
+    },
+    "near_above|0-60|toward|above|low_vol": {
+      "wr": 0.6628,
+      "count": 251.6,
+      "wins_w": 167.2,
+      "parent_wr": 0.6404
+    },
+    "near_below|180-240|away|below|low_vol": {
+      "wr": 0.7252,
+      "count": 423.5,
+      "wins_w": 308.6,
+      "parent_wr": 0.6519
+    },
+    "below|120-180|flat|below|low_vol": {
+      "wr": 0.8521,
+      "count": 110.0,
+      "wins_w": 94.8,
+      "parent_wr": 0.7984
+    },
+    "near_above|60-120|away|above|low_vol": {
+      "wr": 0.7276,
+      "count": 334.0,
+      "wins_w": 244.0,
+      "parent_wr": 0.6784
+    },
+    "far_above|0-60|flat|above|low_vol": {
+      "wr": 0.95,
+      "count": 97.7,
+      "wins_w": 94.7,
+      "parent_wr": 0.95
+    },
+    "at_strike|240-300|away|below|low_vol": {
+      "wr": 0.6027,
+      "count": 566.3,
+      "wins_w": 341.9,
+      "parent_wr": 0.5724
+    },
+    "at_strike|180-240|toward|above|low_vol": {
+      "wr": 0.4411,
+      "count": 224.7,
+      "wins_w": 98.6,
+      "parent_wr": 0.4671
+    },
+    "below|120-180|away|below|low_vol": {
+      "wr": 0.8321,
+      "count": 425.8,
+      "wins_w": 355.0,
+      "parent_wr": 0.7985
+    },
+    "below|60-120|flat|below|low_vol": {
+      "wr": 0.8627,
+      "count": 151.3,
+      "wins_w": 130.7,
+      "parent_wr": 0.8543
+    },
+    "below|0-60|away|below|low_vol": {
+      "wr": 0.95,
+      "count": 323.1,
+      "wins_w": 312.3,
+      "parent_wr": 0.9262
+    },
+    "near_above|120-180|toward|above|low_vol": {
+      "wr": 0.5677,
+      "count": 268.3,
+      "wins_w": 152.4,
+      "parent_wr": 0.564
+    },
+    "above|60-120|flat|above|low_vol": {
+      "wr": 0.7458,
+      "count": 323.3,
+      "wins_w": 240.8,
+      "parent_wr": 0.7616
+    },
+    "at_strike|0-60|away|above|mid_vol": {
+      "wr": 0.6009,
+      "count": 92.6,
+      "wins_w": 56.1,
+      "parent_wr": 0.5779
+    },
+    "at_strike|120-180|away|below|mid_vol": {
+      "wr": 0.5374,
+      "count": 119.7,
+      "wins_w": 63.9,
+      "parent_wr": 0.5585
+    },
+    "at_strike|240-300|flat|below|mid_vol": {
+      "wr": 0.5202,
+      "count": 112.4,
+      "wins_w": 58.1,
+      "parent_wr": 0.5386
+    },
+    "above|60-120|flat|above|mid_vol": {
+      "wr": 0.749,
+      "count": 145.6,
+      "wins_w": 108.8,
+      "parent_wr": 0.7616
+    },
+    "far_below|240-300|away|below|mid_vol": {
+      "wr": 0.8488,
+      "count": 51.1,
+      "wins_w": 44.9,
+      "parent_wr": 0.7724
+    },
+    "at_strike|120-180|flat|above|mid_vol": {
+      "wr": 0.5194,
+      "count": 63.3,
+      "wins_w": 33.0,
+      "parent_wr": 0.5134
+    },
+    "below|60-120|toward|below|high_vol": {
+      "wr": 0.7987,
+      "count": 228.4,
+      "wins_w": 181.6,
+      "parent_wr": 0.84
+    },
+    "below|120-180|toward|below|high_vol": {
+      "wr": 0.7207,
+      "count": 219.0,
+      "wins_w": 156.9,
+      "parent_wr": 0.7676
+    },
+    "far_below|60-120|toward|below|mid_vol": {
+      "wr": 0.95,
+      "count": 123.0,
+      "wins_w": 119.5,
+      "parent_wr": 0.95
+    },
+    "near_below|0-60|away|below|high_vol": {
+      "wr": 0.7727,
+      "count": 143.5,
+      "wins_w": 110.3,
+      "parent_wr": 0.8021
+    },
+    "above|120-180|toward|above|high_vol": {
+      "wr": 0.6855,
+      "count": 226.5,
+      "wins_w": 155.8,
+      "parent_wr": 0.6583
+    },
+    "far_above|180-240|away|above|high_vol": {
+      "wr": 0.8228,
+      "count": 495.3,
+      "wins_w": 407.4,
+      "parent_wr": 0.8284
+    },
+    "far_below|60-120|toward|below|high_vol": {
+      "wr": 0.95,
+      "count": 235.1,
+      "wins_w": 226.2,
+      "parent_wr": 0.95
+    },
+    "far_below|240-300|away|below|high_vol": {
+      "wr": 0.7399,
+      "count": 189.0,
+      "wins_w": 139.2,
+      "parent_wr": 0.7724
+    },
+    "above|60-120|toward|above|high_vol": {
+      "wr": 0.7648,
+      "count": 262.1,
+      "wins_w": 200.3,
+      "parent_wr": 0.7731
+    },
+    "near_above|0-60|away|above|high_vol": {
+      "wr": 0.6818,
+      "count": 164.9,
+      "wins_w": 112.0,
+      "parent_wr": 0.7034
+    },
+    "at_strike|180-240|toward|above|high_vol": {
+      "wr": 0.5091,
+      "count": 121.5,
+      "wins_w": 62.7,
+      "parent_wr": 0.4671
+    },
+    "far_below|180-240|toward|below|high_vol": {
+      "wr": 0.8418,
+      "count": 69.4,
+      "wins_w": 57.7,
+      "parent_wr": 0.8779
+    },
+    "near_below|60-120|away|below|high_vol": {
+      "wr": 0.687,
+      "count": 174.8,
+      "wins_w": 118.9,
+      "parent_wr": 0.7467
+    },
+    "far_above|180-240|toward|above|high_vol": {
+      "wr": 0.8362,
+      "count": 100.2,
+      "wins_w": 83.5,
+      "parent_wr": 0.8504
+    },
+    "at_strike|0-60|away|below|high_vol": {
+      "wr": 0.6223,
+      "count": 75.8,
+      "wins_w": 45.2,
+      "parent_wr": 0.7206
+    },
+    "at_strike|120-180|toward|above|high_vol": {
+      "wr": 0.5549,
+      "count": 101.8,
+      "wins_w": 56.9,
+      "parent_wr": 0.5346
+    },
+    "at_strike|120-180|away|below|high_vol": {
+      "wr": 0.5158,
+      "count": 91.8,
+      "wins_w": 46.5,
+      "parent_wr": 0.5585
+    },
+    "below|180-240|toward|below|high_vol": {
+      "wr": 0.6403,
+      "count": 163.3,
+      "wins_w": 103.9,
+      "parent_wr": 0.6737
+    },
+    "near_above|0-60|toward|above|high_vol": {
+      "wr": 0.6707,
+      "count": 139.1,
+      "wins_w": 93.9,
+      "parent_wr": 0.6404
+    },
+    "near_below|180-240|toward|below|high_vol": {
+      "wr": 0.6102,
+      "count": 144.9,
+      "wins_w": 88.3,
+      "parent_wr": 0.6159
+    },
+    "at_strike|240-300|flat|above|high_vol": {
+      "wr": 0.5502,
+      "count": 58.3,
+      "wins_w": 32.4,
+      "parent_wr": 0.5342
+    },
+    "near_above|120-180|toward|above|high_vol": {
+      "wr": 0.5594,
+      "count": 169.1,
+      "wins_w": 94.5,
+      "parent_wr": 0.564
+    },
+    "at_strike|60-120|away|above|high_vol": {
+      "wr": 0.4941,
+      "count": 100.4,
+      "wins_w": 49.1,
+      "parent_wr": 0.5196
+    },
+    "above|60-120|flat|above|high_vol": {
+      "wr": 0.8353,
+      "count": 81.8,
+      "wins_w": 69.8,
+      "parent_wr": 0.7616
+    },
+    "near_below|180-240|flat|below|mid_vol": {
+      "wr": 0.5955,
+      "count": 70.7,
+      "wins_w": 41.2,
+      "parent_wr": 0.6405
+    },
+    "at_strike|0-60|away|above|high_vol": {
+      "wr": 0.581,
+      "count": 80.1,
+      "wins_w": 46.6,
+      "parent_wr": 0.5779
+    },
+    "above|120-180|flat|above|high_vol": {
+      "wr": 0.6768,
+      "count": 74.7,
+      "wins_w": 50.4,
+      "parent_wr": 0.6847
+    },
+    "near_above|180-240|flat|above|mid_vol": {
+      "wr": 0.5986,
+      "count": 102.8,
+      "wins_w": 60.7,
+      "parent_wr": 0.6407
+    },
+    "at_strike|240-300|flat|below|high_vol": {
+      "wr": 0.5935,
+      "count": 79.7,
+      "wins_w": 48.4,
+      "parent_wr": 0.5386
+    },
+    "at_strike|120-180|toward|below|high_vol": {
+      "wr": 0.5574,
+      "count": 88.0,
+      "wins_w": 49.0,
+      "parent_wr": 0.56
+    },
+    "at_strike|60-120|away|above|mid_vol": {
+      "wr": 0.5091,
+      "count": 133.0,
+      "wins_w": 67.5,
+      "parent_wr": 0.5196
+    },
+    "below|180-240|flat|below|mid_vol": {
+      "wr": 0.7183,
+      "count": 62.2,
+      "wins_w": 45.1,
+      "parent_wr": 0.6974
+    },
+    "below|0-60|flat|below|mid_vol": {
+      "wr": 0.925,
+      "count": 103.6,
+      "wins_w": 95.7,
+      "parent_wr": 0.9314
+    },
+    "near_above|240-300|away|above|low_vol": {
+      "wr": 0.6428,
+      "count": 703.8,
+      "wins_w": 452.9,
+      "parent_wr": 0.6192
+    },
+    "at_strike|180-240|away|below|low_vol": {
+      "wr": 0.5728,
+      "count": 286.3,
+      "wins_w": 163.8,
+      "parent_wr": 0.5826
+    },
+    "near_below|60-120|toward|below|low_vol": {
+      "wr": 0.7402,
+      "count": 172.2,
+      "wins_w": 128.4,
+      "parent_wr": 0.6931
+    },
+    "near_below|0-60|toward|below|low_vol": {
+      "wr": 0.8216,
+      "count": 190.3,
+      "wins_w": 156.8,
+      "parent_wr": 0.7993
+    },
+    "at_strike|180-240|away|above|low_vol": {
+      "wr": 0.5908,
+      "count": 264.8,
+      "wins_w": 156.9,
+      "parent_wr": 0.5682
+    },
+    "near_above|120-180|away|above|low_vol": {
+      "wr": 0.674,
+      "count": 377.6,
+      "wins_w": 255.6,
+      "parent_wr": 0.6199
+    },
+    "near_above|60-120|toward|above|low_vol": {
+      "wr": 0.5753,
+      "count": 239.1,
+      "wins_w": 137.0,
+      "parent_wr": 0.6026
+    },
+    "at_strike|120-180|toward|above|low_vol": {
+      "wr": 0.5695,
+      "count": 169.8,
+      "wins_w": 97.4,
+      "parent_wr": 0.5346
+    },
+    "at_strike|60-120|flat|below|low_vol": {
+      "wr": 0.5873,
+      "count": 204.0,
+      "wins_w": 119.9,
+      "parent_wr": 0.5823
+    },
+    "near_above|180-240|away|above|low_vol": {
+      "wr": 0.679,
+      "count": 482.0,
+      "wins_w": 328.5,
+      "parent_wr": 0.6172
+    },
+    "near_above|60-120|flat|above|low_vol": {
+      "wr": 0.6331,
+      "count": 300.1,
+      "wins_w": 189.7,
+      "parent_wr": 0.6477
+    },
+    "near_below|0-60|away|below|low_vol": {
+      "wr": 0.8249,
+      "count": 261.9,
+      "wins_w": 216.5,
+      "parent_wr": 0.8021
+    },
+    "far_below|60-120|away|below|low_vol": {
+      "wr": 0.95,
+      "count": 183.8,
+      "wins_w": 181.1,
+      "parent_wr": 0.95
+    },
+    "far_below|0-60|away|below|low_vol": {
+      "wr": 0.95,
+      "count": 211.2,
+      "wins_w": 211.2,
+      "parent_wr": 0.95
+    },
+    "near_below|60-120|flat|below|low_vol": {
+      "wr": 0.7828,
+      "count": 204.1,
+      "wins_w": 160.0,
+      "parent_wr": 0.7709
+    },
+    "near_below|0-60|flat|below|low_vol": {
+      "wr": 0.8098,
+      "count": 222.4,
+      "wins_w": 180.1,
+      "parent_wr": 0.8096
+    },
+    "near_below|180-240|flat|below|low_vol": {
+      "wr": 0.6763,
+      "count": 191.6,
+      "wins_w": 130.3,
+      "parent_wr": 0.6405
+    },
+    "far_below|120-180|away|below|low_vol": {
+      "wr": 0.95,
+      "count": 139.6,
+      "wins_w": 135.6,
+      "parent_wr": 0.9189
+    },
+    "near_above|0-60|flat|above|low_vol": {
+      "wr": 0.6953,
+      "count": 293.7,
+      "wins_w": 204.4,
+      "parent_wr": 0.6861
+    },
+    "far_above|120-180|toward|above|low_vol": {
+      "wr": 0.8787,
+      "count": 76.0,
+      "wins_w": 67.0,
+      "parent_wr": 0.8677
+    },
+    "far_above|60-120|away|above|low_vol": {
+      "wr": 0.95,
+      "count": 274.9,
+      "wins_w": 265.5,
+      "parent_wr": 0.95
+    },
+    "far_above|0-60|toward|above|low_vol": {
+      "wr": 0.95,
+      "count": 141.8,
+      "wins_w": 136.8,
+      "parent_wr": 0.95
+    },
+    "at_strike|120-180|flat|below|mid_vol": {
+      "wr": 0.5837,
+      "count": 58.9,
+      "wins_w": 34.8,
+      "parent_wr": 0.5626
+    },
+    "above|0-60|flat|above|mid_vol": {
+      "wr": 0.8358,
+      "count": 150.2,
+      "wins_w": 126.0,
+      "parent_wr": 0.8127
+    },
+    "far_above|240-300|away|above|mid_vol": {
+      "wr": 0.7266,
+      "count": 131.0,
+      "wins_w": 94.8,
+      "parent_wr": 0.7456
+    },
+    "at_strike|60-120|toward|below|high_vol": {
+      "wr": 0.5225,
+      "count": 80.9,
+      "wins_w": 41.7,
+      "parent_wr": 0.5512
+    },
+    "below|120-180|flat|below|high_vol": {
+      "wr": 0.7219,
+      "count": 71.8,
+      "wins_w": 50.3,
+      "parent_wr": 0.7984
+    },
+    "at_strike|0-60|toward|below|high_vol": {
+      "wr": 0.617,
+      "count": 73.8,
+      "wins_w": 45.1,
+      "parent_wr": 0.6387
+    },
+    "below|60-120|flat|below|high_vol": {
+      "wr": 0.8454,
+      "count": 54.5,
+      "wins_w": 45.9,
+      "parent_wr": 0.8543
+    },
+    "far_above|60-120|flat|above|mid_vol": {
+      "wr": 0.95,
+      "count": 56.8,
+      "wins_w": 55.8,
+      "parent_wr": 0.9474
+    },
+    "near_above|180-240|flat|above|low_vol": {
+      "wr": 0.6435,
+      "count": 287.1,
+      "wins_w": 184.8,
+      "parent_wr": 0.6407
+    },
+    "at_strike|120-180|flat|above|low_vol": {
+      "wr": 0.5112,
+      "count": 222.9,
+      "wins_w": 113.9,
+      "parent_wr": 0.5134
+    },
+    "at_strike|0-60|flat|above|low_vol": {
+      "wr": 0.5815,
+      "count": 210.7,
+      "wins_w": 123.3,
+      "parent_wr": 0.5431
+    },
+    "above|180-240|toward|above|low_vol": {
+      "wr": 0.6425,
+      "count": 211.5,
+      "wins_w": 135.2,
+      "parent_wr": 0.6764
+    },
+    "above|180-240|flat|above|low_vol": {
+      "wr": 0.5707,
+      "count": 297.2,
+      "wins_w": 169.1,
+      "parent_wr": 0.5965
+    },
+    "above|0-60|away|above|low_vol": {
+      "wr": 0.872,
+      "count": 499.3,
+      "wins_w": 435.2,
+      "parent_wr": 0.8825
+    },
+    "far_below|60-120|toward|below|low_vol": {
+      "wr": 0.95,
+      "count": 62.0,
+      "wins_w": 61.0,
+      "parent_wr": 0.95
+    },
+    "below|60-120|away|below|low_vol": {
+      "wr": 0.9094,
+      "count": 373.0,
+      "wins_w": 340.2,
+      "parent_wr": 0.8595
+    },
+    "above|120-180|toward|above|low_vol": {
+      "wr": 0.6323,
+      "count": 280.3,
+      "wins_w": 176.7,
+      "parent_wr": 0.6583
+    },
+    "near_below|120-180|away|below|low_vol": {
+      "wr": 0.7295,
+      "count": 343.2,
+      "wins_w": 250.8,
+      "parent_wr": 0.7072
+    },
+    "near_above|0-60|away|above|low_vol": {
+      "wr": 0.7292,
+      "count": 307.7,
+      "wins_w": 224.9,
+      "parent_wr": 0.7034
+    },
+    "below|240-300|away|below|low_vol": {
+      "wr": 0.703,
+      "count": 236.6,
+      "wins_w": 166.9,
+      "parent_wr": 0.6745
+    },
+    "below|0-60|toward|below|low_vol": {
+      "wr": 0.95,
+      "count": 196.8,
+      "wins_w": 188.4,
+      "parent_wr": 0.9155
+    },
+    "at_strike|0-60|away|above|low_vol": {
+      "wr": 0.555,
+      "count": 169.1,
+      "wins_w": 93.4,
+      "parent_wr": 0.5779
+    },
+    "below|0-60|flat|below|low_vol": {
+      "wr": 0.9411,
+      "count": 181.5,
+      "wins_w": 171.0,
+      "parent_wr": 0.9314
+    },
+    "at_strike|120-180|toward|below|low_vol": {
+      "wr": 0.574,
+      "count": 151.6,
+      "wins_w": 87.3,
+      "parent_wr": 0.56
+    },
+    "at_strike|180-240|flat|above|low_vol": {
+      "wr": 0.526,
+      "count": 240.5,
+      "wins_w": 126.6,
+      "parent_wr": 0.5209
+    },
+    "at_strike|120-180|away|below|low_vol": {
+      "wr": 0.5926,
+      "count": 217.2,
+      "wins_w": 129.4,
+      "parent_wr": 0.5585
+    },
+    "at_strike|60-120|away|above|low_vol": {
+      "wr": 0.5401,
+      "count": 178.3,
+      "wins_w": 96.7,
+      "parent_wr": 0.5196
+    },
+    "near_below|120-180|toward|below|low_vol": {
+      "wr": 0.6819,
+      "count": 203.5,
+      "wins_w": 139.5,
+      "parent_wr": 0.6447
+    },
+    "near_below|180-240|toward|below|low_vol": {
+      "wr": 0.656,
+      "count": 162.2,
+      "wins_w": 107.2,
+      "parent_wr": 0.6159
+    },
+    "near_below|120-180|flat|below|low_vol": {
+      "wr": 0.7262,
+      "count": 202.8,
+      "wins_w": 147.7,
+      "parent_wr": 0.7047
+    },
+    "at_strike|60-120|away|below|low_vol": {
+      "wr": 0.5928,
+      "count": 176.2,
+      "wins_w": 104.6,
+      "parent_wr": 0.5857
+    },
+    "at_strike|0-60|flat|below|low_vol": {
+      "wr": 0.6671,
+      "count": 174.4,
+      "wins_w": 116.4,
+      "parent_wr": 0.6643
+    },
+    "below|180-240|flat|below|low_vol": {
+      "wr": 0.7169,
+      "count": 75.2,
+      "wins_w": 54.3,
+      "parent_wr": 0.6974
+    },
+    "at_strike|180-240|flat|below|low_vol": {
+      "wr": 0.5984,
+      "count": 204.9,
+      "wins_w": 122.4,
+      "parent_wr": 0.6087
+    },
+    "below|60-120|toward|below|low_vol": {
+      "wr": 0.8767,
+      "count": 195.0,
+      "wins_w": 171.7,
+      "parent_wr": 0.84
+    },
+    "at_strike|0-60|toward|below|low_vol": {
+      "wr": 0.6286,
+      "count": 134.9,
+      "wins_w": 84.6,
+      "parent_wr": 0.6387
+    },
+    "at_strike|0-60|toward|above|low_vol": {
+      "wr": 0.4962,
+      "count": 161.3,
+      "wins_w": 79.9,
+      "parent_wr": 0.5035
+    },
+    "at_strike|60-120|toward|above|low_vol": {
+      "wr": 0.4338,
+      "count": 182.8,
+      "wins_w": 79.1,
+      "parent_wr": 0.4442
+    },
+    "near_below|60-120|away|below|low_vol": {
+      "wr": 0.7741,
+      "count": 286.2,
+      "wins_w": 222.1,
+      "parent_wr": 0.7467
+    },
+    "at_strike|120-180|flat|below|low_vol": {
+      "wr": 0.5573,
+      "count": 203.3,
+      "wins_w": 113.2,
+      "parent_wr": 0.5626
+    },
+    "at_strike|240-300|flat|below|low_vol": {
+      "wr": 0.5239,
+      "count": 183.6,
+      "wins_w": 95.9,
+      "parent_wr": 0.5386
+    },
+    "near_above|180-240|toward|above|low_vol": {
+      "wr": 0.5301,
+      "count": 223.9,
+      "wins_w": 118.7,
+      "parent_wr": 0.5298
+    },
+    "at_strike|60-120|flat|above|low_vol": {
+      "wr": 0.5422,
+      "count": 190.9,
+      "wins_w": 103.9,
+      "parent_wr": 0.5222
+    },
+    "near_above|120-180|flat|above|low_vol": {
+      "wr": 0.6486,
+      "count": 322.3,
+      "wins_w": 209.1,
+      "parent_wr": 0.6462
+    },
+    "above|120-180|flat|above|low_vol": {
+      "wr": 0.6859,
+      "count": 272.3,
+      "wins_w": 186.8,
+      "parent_wr": 0.6847
+    },
+    "at_strike|240-300|flat|above|low_vol": {
+      "wr": 0.5327,
+      "count": 182.7,
+      "wins_w": 97.3,
+      "parent_wr": 0.5342
+    },
+    "far_above|60-120|toward|above|low_vol": {
+      "wr": 0.9384,
+      "count": 122.7,
+      "wins_w": 115.0,
+      "parent_wr": 0.9457
+    },
+    "far_below|180-240|away|below|low_vol": {
+      "wr": 0.9232,
+      "count": 81.9,
+      "wins_w": 76.5,
+      "parent_wr": 0.8787
+    },
+    "far_below|0-60|toward|below|low_vol": {
+      "wr": 0.95,
+      "count": 99.1,
+      "wins_w": 99.1,
+      "parent_wr": 0.95
+    },
+    "far_above|60-120|flat|above|low_vol": {
+      "wr": 0.9334,
+      "count": 81.4,
+      "wins_w": 75.7,
+      "parent_wr": 0.9474
+    },
+    "below|180-240|toward|below|low_vol": {
+      "wr": 0.6971,
+      "count": 77.8,
+      "wins_w": 54.7,
+      "parent_wr": 0.6737
+    },
+    "far_above|120-180|flat|above|high_vol": {
+      "wr": 0.8558,
+      "count": 59.0,
+      "wins_w": 49.9,
+      "parent_wr": 0.8855
+    },
+    "far_above|240-300|away|above|low_vol": {
+      "wr": 0.7592,
+      "count": 65.5,
+      "wins_w": 50.0,
+      "parent_wr": 0.7456
+    },
+    "near_above|240-300|toward|above|low_vol": {
+      "wr": 0.3407,
+      "count": 186.3,
+      "wins_w": 62.8,
+      "parent_wr": 0.3748
+    },
+    "above|240-300|flat|above|low_vol": {
+      "wr": 0.546,
+      "count": 190.8,
+      "wins_w": 103.6,
+      "parent_wr": 0.5748
+    },
+    "near_above|240-300|flat|above|low_vol": {
+      "wr": 0.5443,
+      "count": 225.5,
+      "wins_w": 123.3,
+      "parent_wr": 0.5162
+    },
+    "at_strike|240-300|toward|above|mid_vol": {
+      "wr": 0.4231,
+      "count": 123.3,
+      "wins_w": 52.0,
+      "parent_wr": 0.4315
+    },
+    "near_above|240-300|toward|above|mid_vol": {
+      "wr": 0.3808,
+      "count": 131.5,
+      "wins_w": 50.2,
+      "parent_wr": 0.3748
+    },
+    "near_above|240-300|flat|above|mid_vol": {
+      "wr": 0.5332,
+      "count": 69.5,
+      "wins_w": 37.4,
+      "parent_wr": 0.5162
+    },
+    "above|240-300|flat|above|mid_vol": {
+      "wr": 0.6158,
+      "count": 59.4,
+      "wins_w": 37.4,
+      "parent_wr": 0.5748
+    },
+    "at_strike|240-300|toward|above|low_vol": {
+      "wr": 0.4211,
+      "count": 191.2,
+      "wins_w": 80.3,
+      "parent_wr": 0.4315
+    },
+    "above|240-300|toward|above|mid_vol": {
+      "wr": 0.4118,
+      "count": 130.1,
+      "wins_w": 53.7,
+      "parent_wr": 0.4055
+    },
+    "at_strike|240-300|toward|above|high_vol": {
+      "wr": 0.4594,
+      "count": 86.5,
+      "wins_w": 40.3,
+      "parent_wr": 0.4315
+    },
+    "near_above|240-300|toward|above|high_vol": {
+      "wr": 0.4269,
+      "count": 94.3,
+      "wins_w": 41.3,
+      "parent_wr": 0.3748
+    },
+    "near_above|240-300|flat|above|high_vol": {
+      "wr": 0.3975,
+      "count": 51.5,
+      "wins_w": 18.1,
+      "parent_wr": 0.5162
+    },
+    "above|240-300|toward|above|low_vol": {
+      "wr": 0.4141,
+      "count": 153.4,
+      "wins_w": 63.7,
+      "parent_wr": 0.4055
+    },
+    "at_strike|240-300|toward|below|mid_vol": {
+      "wr": 0.52,
+      "count": 72.7,
+      "wins_w": 38.5,
+      "parent_wr": 0.4854
+    },
+    "at_strike|240-300|toward|below|high_vol": {
+      "wr": 0.5374,
+      "count": 59.1,
+      "wins_w": 32.8,
+      "parent_wr": 0.4854
+    },
+    "at_strike|240-300|toward|below|low_vol": {
+      "wr": 0.4108,
+      "count": 69.6,
+      "wins_w": 27.1,
+      "parent_wr": 0.4854
+    }
+  }
+}

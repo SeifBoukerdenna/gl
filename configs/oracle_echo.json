@@ -1,0 +1,19 @@
+{
+    "_description": "Oracle ECHO — fires only when blitz_1, test_ic_wide, test_xp, or edge_hunter fired same direction in last 30s. Tests if multi-source piggybacking works.",
+    "ARCHITECTURE": "oracle_echo",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 200,
+    "MAX_SHARES": 600,
+    "MAX_RISK_PCT": 0.99,
+    "STARTING_BANKROLL": 999999,
+    "ECHO_BASE_DOLLARS": 200,
+    "ECHO_WINDOW_SEC": 900,
+    "ECHO_MIN_EDGE": 0.03,
+    "ECHO_COOLDOWN_SEC": 10,
+    "OR_MAX_ENTRY": 0.90,
+    "OR_MIN_ENTRY": 0.10,
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false,
+    "SIGNAL_CHECK_MS": 50
+}

@@ -1,0 +1,32 @@
+{
+    "_description": "Oracle CHRONO AGGRESSIVE — also blocks regime-dependent killers (T-150-180 NO, T-180-210 NO). Tests if being more aggressive with time filter helps or loses good-regime trades.",
+    "ARCHITECTURE": "oracle_chrono",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 200,
+    "MAX_SHARES": 600,
+    "MAX_RISK_PCT": 0.99,
+    "STARTING_BANKROLL": 999999,
+    "OR_BASE_DOLLARS": 200,
+    "OR_PHASE1_MIN_EDGE": 0.08,
+    "OR_PHASE2_MIN_EDGE": 0.05,
+    "OR_MAX_ENTRY": 0.88,
+    "OR_MIN_ENTRY": 0.10,
+    "OR_COOLDOWN_SEC": 10,
+    "CHRONO_BLOCKED": [
+        "60-90|NO",
+        "5-30|NO",
+        "270-300|NO",
+        "150-180|NO",
+        "180-210|NO",
+        "90-120|YES"
+    ],
+    "CHRONO_BOOSTED": [
+        "210-240|NO",
+        "150-180|YES",
+        "180-210|YES"
+    ],
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false,
+    "SIGNAL_CHECK_MS": 50
+}

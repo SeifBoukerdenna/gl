@@ -1,0 +1,17 @@
+[Unit]
+Description=Cloudflare Tunnel for Polymarket Dashboard
+After=network.target polymarket-dashboard.service
+Requires=polymarket-dashboard.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/cloudflared tunnel --url http://localhost:5555 --no-autoupdate
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/polymarket-bot/tunnel.log
+StandardError=append:/var/log/polymarket-bot/tunnel.log
+Environment=NO_AUTOUPDATE=true
+
+[Install]
+WantedBy=multi-user.target

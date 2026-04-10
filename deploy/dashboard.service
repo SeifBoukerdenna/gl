@@ -1,0 +1,20 @@
+[Unit]
+Description=Polymarket Dashboard (Web UI)
+After=network.target polymarket-ws-relay.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/polymarket-bot
+ExecStart=/opt/polymarket-bot/.venv/bin/python -u dashboard.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/polymarket-bot/dashboard.log
+StandardError=append:/var/log/polymarket-bot/dashboard.log
+Environment=PYTHONUNBUFFERED=1
+Environment=DASH_ON_VPS=1
+Environment=DASH_USER=admin
+Environment=DASH_PASS=changeme123
+
+[Install]
+WantedBy=multi-user.target

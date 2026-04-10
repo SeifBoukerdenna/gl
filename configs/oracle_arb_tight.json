@@ -1,0 +1,20 @@
+{
+    "_description": "Oracle ARB TIGHT — requires 10pp mispricing (vs 5pp default). Fixes the laxness concern: 5pp mispricing translates to <3pp edge after fees, which is too permissive.",
+    "ARCHITECTURE": "oracle_arb",
+    "ONE_TRADE_PER_WINDOW": false,
+    "BASE_TRADE_DOLLARS": 200,
+    "MAX_SHARES": 600,
+    "MAX_RISK_PCT": 0.99,
+    "STARTING_BANKROLL": 999999,
+    "OR_BASE_DOLLARS": 200,
+    "OR_MAX_ENTRY": 0.95,
+    "OR_MIN_ENTRY": 0.05,
+    "OR_COOLDOWN_SEC": 10,
+    "MISPRICING_MIN_PP": 0.10,
+    "MISPRICING_STRONG_PP": 0.15,
+    "MISPRICING_MAX_PP": 0.30,
+    "EDGE_TABLE_FILTER": false,
+    "CHOP_FILTER": false,
+    "LOSS_COOLDOWN": false,
+    "SIGNAL_CHECK_MS": 50
+}
