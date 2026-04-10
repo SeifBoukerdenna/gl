@@ -137,9 +137,64 @@ def _bg_vps_ws():
 # ══════════════════════════════════════════════════════════════
 # Viability cache — periodically recomputes from CSVs and gets
 # injected into SSE updates so the live cards show the metrics.
+# Also persists hourly snapshots to enable trend charts.
 # ══════════════════════════════════════════════════════════════
 _viability_cache = {}  # session_name -> viability dict
 _viability_cache_lock = threading.Lock()
+_viability_history_path = Path("data/_viability_history.json")
+_viability_history = {}  # session_name -> [{ts, r2, rolling_pct, worst_6h, calmar, viability}, ...]
+_last_history_snapshot = [0.0]
+
+
+def _load_viability_history():
+    """Load persisted viability history on startup."""
+    global _viability_history
+    if _viability_history_path.exists():
+        try:
+            with open(_viability_history_path) as f:
+                _viability_history = json.load(f)
+        except Exception:
+            _viability_history = {}
+
+
+def _save_viability_history():
+    """Persist viability history to disk."""
+    try:
+        _viability_history_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(_viability_history_path, "w") as f:
+            json.dump(_viability_history, f)
+    except Exception:
+        pass
+
+
+def _snapshot_viability_history():
+    """Take an hourly snapshot of all sessions' viability for trending."""
+    now = time.time()
+    if now - _last_history_snapshot[0] < 3600:  # one snapshot per hour
+        return
+    _last_history_snapshot[0] = now
+
+    with _viability_cache_lock:
+        snapshot = dict(_viability_cache)
+
+    for name, v in snapshot.items():
+        if v.get("viability") == "insufficient_data":
+            continue
+        if name not in _viability_history:
+            _viability_history[name] = []
+        _viability_history[name].append({
+            "ts": now,
+            "r2": v.get("r_squared"),
+            "rolling_pct": v.get("rolling_pct"),
+            "worst_6h": v.get("worst_6h"),
+            "calmar": v.get("calmar"),
+            "viability": v.get("viability"),
+            "flags_passed": v.get("flags_passed", 0),
+        })
+        # Keep last 7 days of snapshots (168 entries max)
+        cutoff = now - 7 * 86400
+        _viability_history[name] = [s for s in _viability_history[name] if s["ts"] >= cutoff][-168:]
+    _save_viability_history()
 
 
 def _refresh_viability_cache():
@@ -184,7 +239,9 @@ def _refresh_viability_cache():
 
 
 def _bg_viability_refresh():
-    """Background thread: recompute viability every 30s and broadcast."""
+    """Background thread: recompute viability every 30s and broadcast.
+    Also takes hourly history snapshots."""
+    _load_viability_history()
     while True:
         try:
             _refresh_viability_cache()
@@ -192,6 +249,7 @@ def _bg_viability_refresh():
                 snapshot = dict(_viability_cache)
             if snapshot:
                 _push_sse({"type": "viability", "viability": snapshot})
+            _snapshot_viability_history()
         except Exception as e:
             print("[viability] error: {}".format(e))
         time.sleep(30)
@@ -1574,7 +1632,8 @@ function renderOverview(el) {
             <div style="height:250px"><canvas id="ov-wr-chart"></canvas></div>
           </div>
         </div>
-        <div id="ov-sessions-zone"></div>`;
+        <div id="ov-sessions-zone"></div>
+        <div id="ov-compare-zone-outer" style="margin-top:20px"></div>`;
         // Initial chart load
         if(!S._ovChartLoading){
             S._ovChartLoading=true;
@@ -1614,6 +1673,21 @@ function renderOverview(el) {
         const dots=last10.map(o=>o==='Up'?'<span style="color:#10b981">U</span>':'<span style="color:#ef4444">D</span>').join(' ');
         return '<div class="stat-box"><div class="stat-label">Regime</div><div class="stat-value '+rc+'">'+regime+'</div><div class="stat-sub" style="font-size:10px">'+dots+' <span class="d">('+Math.round(altRate*100)+'% alt)</span></div></div>';
       })()}
+      ${(()=>{
+        // Memory monitor — fetched async, cached in S._memInfo
+        const m = S._memInfo;
+        if(!m) {
+          if(!S._memLoading) {
+            S._memLoading = true;
+            api('/api/system-mem').then(d=>{S._memInfo=d;S._memLoading=false;}).catch(()=>{S._memLoading=false;});
+          }
+          return '<div class="stat-box"><div class="stat-label">VPS Memory</div><div class="stat-value d">...</div><div class="stat-sub">checking</div></div>';
+        }
+        const pct = m.pct_used || 0;
+        const cls = pct >= 90 ? 'r' : pct >= 80 ? 'cy' : pct >= 70 ? 'cy' : 'g';
+        const warn = pct >= 90 ? ' ⚠️ CRITICAL' : pct >= 80 ? ' ⚠️' : '';
+        return '<div class="stat-box"><div class="stat-label">VPS Memory</div><div class="stat-value '+cls+'">'+pct.toFixed(0)+'%'+warn+'</div><div class="stat-sub">'+m.used_mb+'/'+m.total_mb+' MB | '+m.available_mb+' MB free</div></div>';
+      })()}
     </div>
     <div style="margin:14px 0 6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <span class="d" style="font-size:10px;margin-right:4px">FILTER</span>${archPills}
@@ -1627,6 +1701,54 @@ function renderOverview(el) {
     </div>
     <div class="sessions-grid">${cards}</div>`;
     S.lastDataJSON = JSON.stringify(ss);
+
+    // Lazy-load A/B comparison panel — into the OUTER zone (sibling of sessions, not a child)
+    // so it doesn't get blown away on session re-renders
+    if(!S._compareLoaded || (Date.now() - (S._compareLoadedAt||0) > 30000)) {
+        S._compareLoaded = true;
+        S._compareLoadedAt = Date.now();
+        api('/api/comparisons').then(data => {
+            const zone = document.getElementById('ov-compare-zone-outer');
+            if(!zone || !Array.isArray(data) || !data.length) return;
+            let html = '<div class="section-header" style="margin-top:14px"><div class="section-title">A/B Comparisons (Lax vs Strict)</div></div>';
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:10px">';
+            data.forEach(pair => {
+                const lv = (pair.lax.viability||{});
+                const sv = (pair.strict.viability||{});
+                const fmtR2 = v => v!=null?v.toFixed(2):'—';
+                const fmtPct = v => v!=null?v.toFixed(0)+'%':'—';
+                const fmtMoney = v => v!=null?'$'+(v>0?'+':'')+Math.round(v).toLocaleString():'—';
+                const fmtCal = v => v!=null?v.toFixed(2):'—';
+                const tag = (verdict) => {
+                    const c = verdict==='viable'?'#10b981':verdict==='promising'?'#3b82f6':verdict==='borderline'?'#f59e0b':verdict==='not_viable'?'#ef4444':'#6b7280';
+                    const l = verdict==='viable'?'VIABLE':verdict==='promising'?'PROMISING':verdict==='borderline'?'BORDER':verdict==='not_viable'?'NOT VIABLE':'NEW';
+                    return `<span style="font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;background:${c}22;color:${c};border:1px solid ${c}">${l}</span>`;
+                };
+                html += `<div class="card" style="padding:12px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <div style="font-weight:600;font-size:12px">${pair.name}</div>
+                  </div>
+                  <table style="width:100%;font-size:11px;font-family:monospace;border-collapse:collapse">
+                    <tr style="color:var(--dim);text-align:right">
+                      <td style="text-align:left">Metric</td>
+                      <td>${pair.lax.session.replace('oracle_','')}</td>
+                      <td>${pair.strict.session.replace('oracle_','')}</td>
+                    </tr>
+                    <tr><td style="color:var(--dim)">Trades</td><td style="text-align:right">${pair.lax.trades}</td><td style="text-align:right">${pair.strict.trades}</td></tr>
+                    <tr><td style="color:var(--dim)">PnL</td><td style="text-align:right;color:${pair.lax.pnl>=0?'#10b981':'#ef4444'}">${fmtMoney(pair.lax.pnl)}</td><td style="text-align:right;color:${pair.strict.pnl>=0?'#10b981':'#ef4444'}">${fmtMoney(pair.strict.pnl)}</td></tr>
+                    <tr><td style="color:var(--dim)">Win Rate</td><td style="text-align:right">${pair.lax.wr.toFixed(0)}%</td><td style="text-align:right">${pair.strict.wr.toFixed(0)}%</td></tr>
+                    <tr><td style="color:var(--dim)">R²</td><td style="text-align:right">${fmtR2(lv.r_squared)}</td><td style="text-align:right">${fmtR2(sv.r_squared)}</td></tr>
+                    <tr><td style="color:var(--dim)">6h+</td><td style="text-align:right">${fmtPct(lv.rolling_pct)}</td><td style="text-align:right">${fmtPct(sv.rolling_pct)}</td></tr>
+                    <tr><td style="color:var(--dim)">Worst 6h</td><td style="text-align:right">${fmtMoney(lv.worst_6h)}</td><td style="text-align:right">${fmtMoney(sv.worst_6h)}</td></tr>
+                    <tr><td style="color:var(--dim)">Calmar</td><td style="text-align:right">${fmtCal(lv.calmar)}</td><td style="text-align:right">${fmtCal(sv.calmar)}</td></tr>
+                    <tr><td style="color:var(--dim)">Verdict</td><td style="text-align:right">${tag(lv.viability||'insufficient_data')}</td><td style="text-align:right">${tag(sv.viability||'insufficient_data')}</td></tr>
+                  </table>
+                </div>`;
+            });
+            html += '</div>';
+            zone.innerHTML = html;
+        }).catch(()=>{});
+    }
 }
 
 // ═══ Session Detail ═══
@@ -2466,6 +2588,19 @@ let evtSource = null;
 let _sseVpsCache = {};  // session name -> latest VPS stats
 let _lastOverviewRender = 0;
 
+// Memory monitor — refresh every 30s
+function _refreshMemory(){
+    api('/api/system-mem').then(d=>{
+        S._memInfo = d;
+        // Force a re-render of the overview if visible
+        if(S.page === 'overview') {
+            const el = document.getElementById('content');
+            if(el) renderOverview(el);
+        }
+    }).catch(()=>{});
+}
+setInterval(_refreshMemory, 30000);
+
 function connectSSE(){
     if(evtSource) evtSource.close();
     evtSource = new EventSource('/api/stream');
@@ -2728,6 +2863,111 @@ def api_stream():
 def api_ws_status():
     """Check if VPS WebSocket relay is connected."""
     return jsonify({"connected": _vps_connected[0], "cached_sessions": len(_vps_cache)})
+
+
+@app.route("/api/system-mem")
+def api_system_mem():
+    """Return current VPS memory usage. Used for OOM monitoring."""
+    try:
+        # When running on VPS, read /proc/meminfo directly
+        if ON_VPS:
+            mem = {}
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    parts = line.split(":")
+                    if len(parts) == 2:
+                        key = parts[0].strip()
+                        val_str = parts[1].strip().split()[0]
+                        try:
+                            mem[key] = int(val_str)  # in kB
+                        except ValueError:
+                            pass
+            total_mb = mem.get("MemTotal", 0) // 1024
+            avail_mb = mem.get("MemAvailable", 0) // 1024
+            free_mb = mem.get("MemFree", 0) // 1024
+            used_mb = total_mb - avail_mb
+            pct_used = round(used_mb / total_mb * 100, 1) if total_mb else 0
+            return jsonify({
+                "total_mb": total_mb,
+                "used_mb": used_mb,
+                "free_mb": free_mb,
+                "available_mb": avail_mb,
+                "pct_used": pct_used,
+                "warning": pct_used > 80,
+                "critical": pct_used > 90,
+            })
+        else:
+            # Local mode — fall back to ssh
+            raw = ssh_cmd("free -m | awk 'NR==2 {print $2,$3,$4,$7}'")
+            parts = raw.strip().split()
+            if len(parts) >= 4:
+                total_mb, used_mb, free_mb, avail_mb = map(int, parts[:4])
+                pct_used = round(used_mb / total_mb * 100, 1) if total_mb else 0
+                return jsonify({
+                    "total_mb": total_mb,
+                    "used_mb": used_mb,
+                    "free_mb": free_mb,
+                    "available_mb": avail_mb,
+                    "pct_used": pct_used,
+                    "warning": pct_used > 80,
+                    "critical": pct_used > 90,
+                })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+    return jsonify({"error": "memory info unavailable"})
+
+
+@app.route("/api/viability-history")
+def api_viability_history():
+    """Return rolling viability history snapshots for trend charts."""
+    return jsonify(_viability_history)
+
+
+@app.route("/api/viability-history/<name>")
+def api_viability_history_one(name):
+    """Return rolling viability history for a single session."""
+    return jsonify(_viability_history.get(name, []))
+
+
+# Architecture A/B comparison pairs (lax vs strict)
+COMPARISON_PAIRS = [
+    {"name": "Pulse confirmation", "lax": "oracle_pulse", "strict": "oracle_pulse_strict"},
+    {"name": "Mispricing threshold", "lax": "oracle_arb", "strict": "oracle_arb_tight"},
+    {"name": "Multi-exchange consensus", "lax": "oracle_consensus", "strict": "oracle_consensus_strict"},
+    {"name": "Time × direction filter", "lax": "oracle_chrono", "strict": "oracle_chrono_aggressive"},
+]
+
+
+@app.route("/api/comparisons")
+def api_comparisons():
+    """Return A/B comparison data for the lax/strict architecture pairs."""
+    out = []
+    with _viability_cache_lock:
+        cache = dict(_viability_cache)
+    for pair in COMPARISON_PAIRS:
+        lax_v = cache.get(pair["lax"], {})
+        strict_v = cache.get(pair["strict"], {})
+        # Also pull stats from CSV for trade count + PnL
+        lax_stats = get_csv_stats(pair["lax"]) or {}
+        strict_stats = get_csv_stats(pair["strict"]) or {}
+        out.append({
+            "name": pair["name"],
+            "lax": {
+                "session": pair["lax"],
+                "trades": lax_stats.get("trades", 0),
+                "wr": lax_stats.get("wr", 0),
+                "pnl": lax_stats.get("pnl_taker", 0),
+                "viability": lax_v,
+            },
+            "strict": {
+                "session": pair["strict"],
+                "trades": strict_stats.get("trades", 0),
+                "wr": strict_stats.get("wr", 0),
+                "pnl": strict_stats.get("pnl_taker", 0),
+                "viability": strict_v,
+            },
+        })
+    return jsonify(out)
 
 
 @app.route("/api/live/<name>")
