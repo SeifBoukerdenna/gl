@@ -127,6 +127,48 @@ class VolatilityTracker:
     def tick_count(self):
         return len(self._ticks)
 
+    def get_sigma_bps_over(self, lookback_seconds):
+        """Stdev of BTC log returns over `lookback_seconds`, expressed in bps.
+
+        This is the EXPECTED magnitude of a typical 1-period move at the chosen
+        lookback. Use it for dynamic threshold sizing:
+
+            threshold_bps = get_sigma_bps_over(15) * sigma_multiplier
+
+        For 'is the move I just observed unusual?', compare the observed bps to
+        this number. A 2-sigma move = observed > 2 × this value.
+
+        Returns None if not enough ticks. Falls back to a sane default otherwise.
+        """
+        sigma = self.get_sigma()  # $/sqrt(s)
+        if sigma <= 0:
+            return None
+        # Convert to bps. We need a price reference.
+        if not self._ticks:
+            return None
+        current_price = self._ticks[-1][1]
+        if current_price <= 0:
+            return None
+        # sigma * sqrt(lookback) = expected $ move over the lookback
+        expected_move_dollars = sigma * math.sqrt(lookback_seconds)
+        # Convert to bps
+        return (expected_move_dollars / current_price) * 10000
+
+    def get_realized_vol_pct(self):
+        """Annualized realized vol % from the current sigma estimate.
+        Returns None if no data."""
+        sigma = self.get_sigma()
+        if sigma <= 0 or not self._ticks:
+            return None
+        current_price = self._ticks[-1][1]
+        if current_price <= 0:
+            return None
+        # sigma is $/sqrt(s). Per-second log return stdev = sigma / price.
+        # Annualize: × sqrt(seconds_per_year) = × sqrt(31_536_000)
+        per_sec_stdev = sigma / current_price
+        annual_stdev = per_sec_stdev * math.sqrt(31_536_000)
+        return annual_stdev * 100  # in percent
+
 
 # Singleton instance — shared across architectures within the same process
 vol_tracker = VolatilityTracker()

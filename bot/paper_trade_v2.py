@@ -114,8 +114,9 @@ def _edge_table_score(direction, entry_price, time_remaining):
         price_30ago = None
         target_ts = time.time() - 30
         for ts, px in state.price_buffer:
-            if ts >= target_ts:
-                price_30ago = px
+            if ts <= target_ts:
+                price_30ago = px  # keep LATEST tick still ≥ 30s old
+            else:
                 break
         if price_30ago and price_30ago > 0:
             mom_bps = (btc - price_30ago) / price_30ago * 10000
@@ -340,7 +341,7 @@ class Combo:
     trades: list = field(default_factory=list)
     total_pnl_taker: float = 0
     total_pnl_maker: float = 0
-    bankroll: float = STARTING_BANKROLL
+    bankroll: float = field(default_factory=lambda: STARTING_BANKROLL)
     tracking_only: bool = False
     restored_trade_count: int = 0  # trades restored from CSV (not in trades list)
     restored_win_count: int = 0
@@ -795,9 +796,15 @@ def execute_paper_trade(combo, direction, impulse_bps, time_remaining, entry_pri
                 _reject("one-trade-per-window ({} already traded)".format(c.name))
                 return
 
-    trade_size = combo.compute_position_size(entry_price, override_dollars)
+    # NO trades use the YES bid as `entry_price`, but the actual cost per share
+    # for a NO contract is (1 - YES_bid). Pass the correct cost-per-share into
+    # the sizer so $200 of intended notional doesn't become $400-500 of actual
+    # notional (a long-standing engine bug fixed 2026-04-10).
+    cost_per_share = (1.0 - entry_price) if direction == "NO" else entry_price
+    trade_size = combo.compute_position_size(cost_per_share, override_dollars)
     if trade_size <= 0:
-        _reject("position size 0 (entry={:.2f} dollars={})".format(entry_price, override_dollars))
+        _reject("position size 0 (entry={:.2f} cost/sh={:.2f} dollars={})".format(
+            entry_price, cost_per_share, override_dollars))
         return
 
     # Stale Book Sizing: scale position based on how stale PM's book is

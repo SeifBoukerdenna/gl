@@ -41,13 +41,12 @@ import json as _json
 from collections import deque
 from pathlib import Path
 
-# ═══ Time × Direction Filters (from analysis of 1,196 oracle trades) ═══
-# Stored as "bucket|direction" strings so they can be overridden from JSON config.
-# Default = surgical (only persistent killers/winners). Override for aggressive variant.
+# ═══ Time × Direction Filters (V2 — softened, vol-aware) ═══
+# V1 blocked too aggressively. The blocks were based on cumulative PnL from a
+# trending regime — they may produce winners in other regimes. V2 only blocks
+# the absolute worst single combo and adds a vol regime gate as the primary filter.
 CHRONO_BLOCKED = [
-    "60-90|NO",     # -$4,384 (worst single bleed)
-    "5-30|NO",      # -$2,011 (last 30s noise)
-    "270-300|NO",   # -$990 (window open NO trades)
+    "60-90|NO",     # -$4,384 (the only PERSISTENT killer across regimes)
 ]
 
 CHRONO_BOOSTED = [
@@ -57,6 +56,10 @@ CHRONO_BOOSTED = [
 ]
 
 CHRONO_BOOSTED_MULTIPLIER = 1.3
+
+# Vol regime gate (NEW in V2)
+CHRONO_MIN_VOL_PCT = 25.0      # skip if 1h vol < this (dead market)
+CHRONO_MAX_VOL_PCT = 80.0      # skip if 1h vol > this (panic regime)
 
 # ═══ Standard Oracle Parameters ═══
 OR_PHASE1_END = 90
@@ -151,8 +154,9 @@ def _compute_edge(state, direction, entry_price, time_remaining):
         target_ts = time.time() - 30
         price_30ago = None
         for ts, px in state.price_buffer:
-            if ts >= target_ts:
-                price_30ago = px
+            if ts <= target_ts:
+                price_30ago = px  # keep the LATEST tick still ≥ 30s old
+            else:
                 break
         if price_30ago and price_30ago > 0:
             mom_bps = (btc - price_30ago) / price_30ago * 10000
@@ -232,6 +236,15 @@ def check_signals(state, now_s):
     book_age_ms = (now - state.book.updated_at) * 1000
     if book_age_ms > getattr(engine, 'MAX_BOOK_AGE_MS', 500):
         return
+
+    # ═══ V2: Vol regime gate ═══
+    from bot.shared.volatility import vol_tracker as _vt
+    realized_vol = _vt.get_realized_vol_pct()
+    if realized_vol is not None:
+        min_vol = getattr(engine, 'CHRONO_MIN_VOL_PCT', CHRONO_MIN_VOL_PCT)
+        max_vol = getattr(engine, 'CHRONO_MAX_VOL_PCT', CHRONO_MAX_VOL_PCT)
+        if realized_vol < min_vol or realized_vol > max_vol:
+            return  # silently skip — wrong regime
 
     btc_corrected = state.binance_price - state.offset
     delta_bps = (btc_corrected - state.window_open) / state.window_open * 10000
@@ -347,6 +360,8 @@ ARCH_SPEC = {
         "CHRONO_BLOCKED": CHRONO_BLOCKED,
         "CHRONO_BOOSTED": CHRONO_BOOSTED,
         "CHRONO_BOOSTED_MULTIPLIER": CHRONO_BOOSTED_MULTIPLIER,
+        "CHRONO_MIN_VOL_PCT": CHRONO_MIN_VOL_PCT,
+        "CHRONO_MAX_VOL_PCT": CHRONO_MAX_VOL_PCT,
         "MIN_ENTRY_PRICE": 0.01, "MAX_ENTRY_PRICE": 0.99,
         "DEAD_ZONE_START": 0, "DEAD_ZONE_END": 0,
         "MIN_SHARES": 1,

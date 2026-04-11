@@ -321,9 +321,13 @@ def get_session_data(name):
     return {"trades": 0, "wins": 0, "wr": 0, "pnl_taker": 0, "combos": {}, "recent_trades": []}
 
 
-def get_csv_stats(name):
+def get_csv_stats(name, since_ts=None):
     """Read trade stats from the CSV file (source of truth for historical data).
-    Also computes viability metrics: R², %6h+, worst 6h, calmar."""
+    Also computes viability metrics: R², %6h+, worst 6h, calmar.
+
+    If `since_ts` is provided, only trades with timestamp >= since_ts are counted.
+    Used for time-range filtered overviews (last 1h, 4h, etc).
+    """
     csv_path = None
     for fname in ["trades.csv", "paper_trades_v2.csv"]:
         p = DATA_DIR / name / fname
@@ -344,17 +348,20 @@ def get_csv_stats(name):
                 result = (row.get("result") or "").strip()
                 pnl_val = row.get("pnl_taker", "")
                 if result in ("WIN", "LOSS"):
+                    try:
+                        p_val = float(pnl_val)
+                        ts_val = float(row.get("timestamp", 0) or 0)
+                    except (ValueError, TypeError):
+                        continue
+                    # Apply time-window filter if requested
+                    if since_ts is not None and ts_val < since_ts:
+                        continue
                     trades += 1
                     if result == "WIN":
                         wins += 1
-                    try:
-                        p_val = float(pnl_val)
-                        pnl += p_val
-                        ts_val = float(row.get("timestamp", 0) or 0)
-                        if ts_val > 0:
-                            trade_series.append((ts_val, p_val))
-                    except (ValueError, TypeError):
-                        pass
+                    pnl += p_val
+                    if ts_val > 0:
+                        trade_series.append((ts_val, p_val))
         wr = round(wins / trades * 100, 1) if trades > 0 else 0
 
         viability = _compute_viability_metrics(trade_series)
@@ -542,8 +549,12 @@ def _get_session_architecture(name):
     return "impulse_lag"
 
 
-def get_all_sessions():
-    """Get sessions with status from VPS + stats from CSV (source of truth)."""
+def get_all_sessions(since_ts=None):
+    """Get sessions with status from VPS + stats from CSV (source of truth).
+
+    If `since_ts` is provided, CSV stats are computed only for trades at or after
+    that timestamp. Used for time-range filtered overviews.
+    """
     sessions = []
     seen = set()
 
@@ -584,7 +595,7 @@ def get_all_sessions():
         for d in sorted(DATA_DIR.iterdir()):
             if not d.is_dir() or d.name in skip or d.name.startswith("_"):
                 continue
-            csv_stats = get_csv_stats(d.name)
+            csv_stats = get_csv_stats(d.name, since_ts=since_ts)
             if csv_stats is None:
                 continue
 
@@ -1057,6 +1068,88 @@ th:first-child{border-radius:6px 0 0 0}th:last-child{border-radius:0 6px 0 0}
 @keyframes pageIn{from{opacity:.85;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
 
 @media(max-width:768px){.sessions-grid{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}.chart-grid{grid-template-columns:1fr}}
+
+/* ═══ Compact Session Table (new tab-based UI) ═══ */
+.table-scroll{overflow-x:auto;background:var(--card);border:1px solid var(--border);border-radius:8px}
+.table-scroll::-webkit-scrollbar{height:8px}
+.session-table{width:100%;border-collapse:separate;border-spacing:0;min-width:800px}
+.session-table th{text-align:left;padding:8px 10px;font-size:9px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.6px;background:var(--bg2);border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:2}
+.session-table th.num{text-align:right}
+.session-table th:first-child{position:sticky;left:0;background:var(--bg2);z-index:3;min-width:170px}
+.session-table td{padding:7px 10px;border-bottom:1px solid rgba(26,31,46,.4);font-size:11px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.session-table td.num{text-align:right}
+.session-table td:first-child{position:sticky;left:0;background:var(--card);z-index:1;min-width:170px}
+.session-table tr:hover td:first-child{background:#171c2c}
+.session-table tbody tr{cursor:pointer;transition:background .15s}
+.session-table tbody tr:hover{background:rgba(91,156,249,.06)}
+.session-table tbody tr.tier-viable td{border-left:3px solid #10b981}
+.session-table tbody tr.tier-promising td:first-child{border-left:3px solid #3b82f6}
+.session-table tbody tr.tier-borderline td:first-child{border-left:3px solid #f59e0b}
+.session-table tbody tr.tier-not_viable td:first-child{border-left:3px solid #ef4444}
+.session-table tbody tr.tier-insufficient_data td:first-child{border-left:3px solid #6b7280}
+.session-table .tier-divider{background:var(--bg2);font-weight:700;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none}
+.session-table .tier-divider td{padding:6px 12px;font-family:'Inter',sans-serif}
+.session-table .tier-divider:hover{background:#1a1f2e}
+.session-table .tier-divider .tier-arrow{display:inline-block;margin-right:6px;font-size:8px;transition:transform .2s}
+.session-table .tier-divider.collapsed .tier-arrow{transform:rotate(-90deg)}
+.session-table .session-name{font-weight:700;color:var(--text);font-size:11px}
+.session-table .session-arch{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px}
+.session-table .v-badge{display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.4px}
+.session-table .v-badge.viable{background:#10b98122;color:#10b981;border:1px solid #10b981}
+.session-table .v-badge.promising{background:#3b82f622;color:#3b82f6;border:1px solid #3b82f6}
+.session-table .v-badge.borderline{background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b}
+.session-table .v-badge.not_viable{background:#ef444422;color:#ef4444;border:1px solid #ef4444}
+.session-table .v-badge.insufficient_data{background:#6b728022;color:#6b7280;border:1px solid #6b7280}
+.session-table .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:4px}
+.session-table .live-dot.on{background:var(--green);box-shadow:0 0 6px rgba(16,185,129,.5)}
+.session-table .live-dot.off{background:var(--dim2)}
+
+/* Compact stat header (4 boxes) */
+.compact-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.compact-stats .stat-box{padding:10px 14px}
+.compact-stats .stat-label{font-size:9px}
+.compact-stats .stat-value{font-size:22px}
+.compact-stats .stat-sub{font-size:9px}
+
+/* Collapsible section */
+.section-collapsible{background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
+.section-collapsible-header{padding:10px 14px;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+.section-collapsible-header:hover{background:rgba(91,156,249,.04)}
+.section-collapsible-header .arrow{font-size:9px;transition:transform .2s}
+.section-collapsible.open .section-collapsible-header .arrow{transform:rotate(90deg)}
+.section-collapsible-body{display:none;padding:14px;border-top:1px solid var(--border)}
+.section-collapsible.open .section-collapsible-body{display:block}
+
+/* Compare page (N-way) */
+.compare-page{padding:0}
+.compare-presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.compare-presets .preset-label{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-right:4px;align-self:center}
+
+.cmp-pill-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;margin-bottom:14px}
+.cmp-pill{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 10px;cursor:pointer;transition:all .15s;position:relative}
+.cmp-pill:hover{border-color:var(--border2);background:var(--card2)}
+.cmp-pill.selected{background:rgba(59,130,246,.08);border-width:2px;padding:7px 9px}
+.cmp-pill-name{display:block;font-size:11px;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace;letter-spacing:-.2px}
+.cmp-pill-arch{display:block;font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.cmp-pill-pnl{display:block;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:700;margin-top:3px}
+
+.cmp-table{min-width:600px}
+.cmp-table .cmp-label{position:sticky;left:0;background:var(--card);font-weight:700;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-family:'Inter',sans-serif;border-right:1px solid var(--border);min-width:110px;z-index:1}
+.cmp-table thead .cmp-label{background:var(--bg2);z-index:3}
+.cmp-table .cmp-h-name{font-size:11px;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace;text-align:right;text-transform:none;letter-spacing:-.2px}
+.cmp-table .cmp-h-arch{font-size:8px;color:var(--dim);text-transform:uppercase;text-align:right;margin-top:2px}
+.cmp-table thead th{padding:8px 12px;min-width:110px}
+.cmp-table thead th:not(:first-child){text-align:right}
+.cmp-table tbody td:first-child{text-align:left}
+
+@media(max-width:768px){
+  .compact-stats{grid-template-columns:repeat(2,1fr)}
+  .session-table{font-size:10px}
+  .session-table th,.session-table td{padding:6px 8px}
+  .compare-pickers{grid-template-columns:1fr;gap:8px}
+  .compare-pickers .vs{display:none}
+  .compare-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -1094,6 +1187,14 @@ th:first-child{border-radius:6px 0 0 0}th:last-child{border-radius:0 6px 0 0}
       <div class="d mono" style="font-size:8px;letter-spacing:1px">DELTA</div>
       <span class="mono" style="font-size:16px;font-weight:700" id="g-delta">\u2014</span>
     </div>
+    <div style="width:1px;height:28px;background:var(--border)"></div>
+    <div style="text-align:center">
+      <div class="d mono" style="font-size:8px;letter-spacing:1px">1H &#916;</div>
+      <div style="display:flex;align-items:baseline;gap:4px;justify-content:center">
+        <span class="mono" style="font-size:16px;font-weight:700" id="g-btc-1h">&mdash;</span>
+        <span class="mono d" style="font-size:9px" id="g-btc-rvol">&mdash;</span>
+      </div>
+    </div>
   </div>
   <!-- Right: PM Book YES/NO -->
   <div style="display:flex;align-items:center;gap:14px">
@@ -1112,7 +1213,8 @@ th:first-child{border-radius:6px 0 0 0}th:last-child{border-radius:0 6px 0 0}
 <div class="topbar">
   <div class="topbar-left">
     <div class="nav">
-      <div class="nav-item active" data-page="overview" onclick="navigate('overview')">Overview</div>
+      <div class="nav-item active" data-page="overview" onclick="navigate('overview')">Portfolio</div>
+      <div class="nav-item" data-page="compare" onclick="navigate('compare')">Compare</div>
       <div class="nav-item" data-page="trades" onclick="navigate('trades')">All Trades</div>
       <div class="nav-item" data-page="analysis" onclick="navigate('analysis')">Analysis</div>
       <div class="nav-item" data-page="status" onclick="navigate('status')">Status</div>
@@ -1189,6 +1291,8 @@ async function loadSession(name) {
         const full = await api('/api/session/'+name);
         S.sessionData[name] = full;
         render();
+        // Build the new PnL trend chart
+        setTimeout(()=>buildSessionTrendChart(name), 150);
     } catch(e) {}
 }
 
@@ -1207,6 +1311,7 @@ function render() {
     const el = document.getElementById('content');
     switch(S.page) {
         case 'overview': renderOverview(el); break;
+        case 'compare': renderCompare(el); break;
         case 'session': renderSession(el); break;
         case 'trades': renderTrades(el); break;
         case 'analysis': renderAnalysis(el); break;
@@ -1227,6 +1332,9 @@ function updateOverview() {
 // ═══ Overview ═══
 S._ovSort='pnl'; S._ovArchSet=new Set(); S._ovDir='desc'; S._ovChartData=null; S._ovChartDirty=true; S._ovTimeAxis=false; S._ovTimePeriod=null;
 S._ovPrev={pnl:null,trades:null,wr:null};
+S._ovPeriod='all';       // 'all' | '1h' | '4h' | '8h' | '12h' | '1d'
+S._ovPeriodData=null;    // cached time-filtered sessions (null when period='all')
+S._ovPeriodRefresher=null;
 S._ovDeltaCache={};  // {key: {color, text, ts}}
 S._ovDeltaPrev={};   // {key: lastValue} — auto-tracks previous values per key
 function ovDeltaBadge(key,cur,prev,fmt){
@@ -1280,6 +1388,32 @@ function ovSetSort(key){
     else{S._ovSort=key;S._ovDir='desc'}
     renderOverview(document.getElementById('content'));
 }
+function ovToggleTier(tier){
+    if(!S._collapsedTiers) S._collapsedTiers={};
+    S._collapsedTiers[tier] = !S._collapsedTiers[tier];
+    renderOverview(document.getElementById('content'));
+}
+function ovToggleCharts(){
+    S._chartsOpen = !S._chartsOpen;
+    const sec = document.getElementById('ov-charts-section');
+    if(sec) sec.classList.toggle('open', S._chartsOpen);
+    // Lazy load chart data when opened for the first time
+    if(S._chartsOpen && !S._ovChartData && !S._ovChartLoading){
+        S._ovChartLoading=true;
+        api('/api/chart-data').then(d=>{S._ovChartData=d;S._ovChartLoading=false;ovBuildCumChart()}).catch(()=>{S._ovChartLoading=false});
+    } else if(S._chartsOpen && S._ovChartData) {
+        setTimeout(ovBuildCumChart, 100);
+    }
+}
+function ovToggleFilter(){
+    S._filterOpen = !S._filterOpen;
+    const sec = document.getElementById('ov-filter-section');
+    if(sec) sec.classList.toggle('open', S._filterOpen);
+}
+function ovToggleStopped(){
+    S._showStopped = !S._showStopped;
+    _updateOverviewFromSSE();
+}
 async function ovEnsureChart(){
     if(S._ovChartData){ovBuildCumChart();return}
     if(S._ovChartLoading) return;
@@ -1312,6 +1446,59 @@ function ovSelectPositive(){
     S._ovArchSet=new Set(Object.entries(archPnl).filter(([a,p])=>p>0).map(([a])=>a));
     renderOverview(document.getElementById('content'));
     setTimeout(()=>ovEnsureChart(),50);
+}
+
+// ═══ Overview time-range period filter (1h / 4h / 8h / 12h / 1d / all) ═══
+//
+// Strategy:
+//   - 'all' view  → SSE-driven (live, fast, native cadence)
+//   - period view → API-driven, refreshed every 3s for live feel
+//   - When a period is active, SSE re-renders are SKIPPED (would clobber
+//     the period data and cause flicker). The period refresher is the sole
+//     source of updates while in period mode.
+//   - On period change, S._ovPeriodData is cleared immediately so the table
+//     shows "loading..." instead of stale data from the previous period.
+function ovSetPeriod(p){
+    if (S._ovPeriod === p) return;  // no-op
+    S._ovPeriod = p;
+    // Clear delta caches so the new period doesn't show spurious cross-period deltas
+    S._ovDeltaCache = {};
+    S._ovDeltaPrev = {};
+    S._ovPrev = {pnl:null, trades:null, wr:null};
+    if (S._ovPeriodRefresher) { clearInterval(S._ovPeriodRefresher); S._ovPeriodRefresher = null; }
+
+    if (p === 'all') {
+        // Back to SSE-driven live view
+        S._ovPeriodData = null;
+        S.lastDataJSON = null;
+        if (S.page === 'overview') renderOverview(document.getElementById('content'));
+        return;
+    }
+    // Period view — clear stale data, show loading immediately
+    S._ovPeriodData = [];      // empty array = "loading" sentinel
+    S._ovLoadingPeriod = true;
+    S.lastDataJSON = null;
+    if (S.page === 'overview') renderOverview(document.getElementById('content'));
+    // Fetch + auto-refresh every 3s for live feel
+    _fetchOvPeriodData();
+    S._ovPeriodRefresher = setInterval(_fetchOvPeriodData, 3000);
+}
+function _fetchOvPeriodData(){
+    const p = S._ovPeriod;
+    if (!p || p === 'all') return;
+    api('/api/overview?period=' + encodeURIComponent(p)).then(d=>{
+        if (S._ovPeriod !== p) return;  // user switched period mid-fetch
+        S._ovPeriodData = d.sessions || [];
+        S._ovLoadingPeriod = false;
+        if (S.page === 'overview') {
+            // Mark dirty so renderOverview's smart-update actually paints
+            S.lastDataJSON = null;
+            renderOverview(document.getElementById('content'));
+        }
+    }).catch(err => {
+        console.error('period fetch failed', err);
+        S._ovLoadingPeriod = false;
+    });
 }
 function ovToggleArch(arch){
     if(arch===''){S._ovArchSet.clear()}
@@ -1508,7 +1695,17 @@ function ovBuildCumChart(){
     }
 }
 function renderOverview(el) {
-    let ss = S.sessions;
+    // Source selection:
+    //   - period mode: use S._ovPeriodData (fetched from /api/overview)
+    //   - all mode:    use S.sessions (live from SSE)
+    // If period mode is "loading" (S._ovPeriodData is empty array), show empty.
+    const inPeriod = (S._ovPeriod && S._ovPeriod !== 'all');
+    let ss = inPeriod ? (S._ovPeriodData || []) : S.sessions;
+    // Show loading state if period view is mid-fetch
+    if (inPeriod && S._ovLoadingPeriod && (!ss || !ss.length)) {
+        el.innerHTML = '<div class="empty"><div class="spinner" style="margin:0 auto"></div><div class="empty-title" style="margin-top:12px">Loading ' + S._ovPeriod + ' data...</div></div>';
+        return;
+    }
     if (!ss.length) { el.innerHTML = '<div class="empty"><div style="font-size:28px;opacity:.3">&#x1f4e1;</div><div class="empty-title">No sessions with data</div><div class="d" style="margin-top:4px;font-size:11px">Run <code>pm pull</code> to sync VPS data, or start a new session</div></div>'; return; }
 
     // Collect unique architectures
@@ -1551,49 +1748,93 @@ function renderOverview(el) {
         sortBtns+=`<button class="btn btn-sm${active?' btn-blue':''}" style="font-size:10px;padding:2px 8px" onclick="ovSetSort('${k}')">${l} ${arrow}</button>`;
     });
 
-    let cards = '';
-    sorted.forEach((s,i) => {
-        const p=s.pnl_taker||0, w=s.wr||0, active=s.status==='running'||s.status==='active';
-        const cls=p>0?'positive':p<0?'negative':'zero';
-        const bc=w>=60?'var(--green)':w>=50?'var(--yellow)':'var(--red)';
-        const avgP=s.trades>0?p/s.trades:0;
-        const dpnl=ovDeltaBadge('sc_pnl_'+s.name,p,null,d=>'$'+Math.round(d).toLocaleString());
-        const dwr=ovDeltaBadge('sc_wr_'+s.name,w,null,d=>d.toFixed(1)+'pp');
-        const dtrades=ovDeltaBadge('sc_trades_'+s.name,s.trades||0,null,d=>d.toString());
-        // Viability badge — 4 tiers now
-        const v = s.viability || {};
-        const verdict = v.viability || 'insufficient_data';
-        const vColor = verdict==='viable'?'#10b981':
-                       verdict==='promising'?'#3b82f6':
-                       verdict==='borderline'?'#f59e0b':
-                       verdict==='not_viable'?'#ef4444':'#6b7280';
-        const vLabel = verdict==='viable'?'VIABLE':
-                       verdict==='promising'?'PROMISING':
-                       verdict==='borderline'?'BORDER':
-                       verdict==='not_viable'?'NOT VIABLE':'NEW';
-        const vTooltip = verdict==='insufficient_data'?'Need 30+ trades and 12+ hours of data':
-            'R²: '+(v.r_squared!=null?v.r_squared:'—')+'  |  6h+: '+(v.rolling_pct!=null?v.rolling_pct+'%':'—')+'  |  Worst 6h: $'+(v.worst_6h!=null?v.worst_6h.toLocaleString():'—')+'  |  Calmar: '+(v.calmar!=null?v.calmar:'—')+'  |  Flags: '+(v.flags_passed||0)+'/4';
-        const vBadge = `<span title="${vTooltip}" style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${vColor}22;color:${vColor};border:1px solid ${vColor};margin-left:6px;letter-spacing:0.5px">${vLabel}</span>`;
+    // ═══ NEW: Compact session table grouped by viability tier ═══
+    // Group sessions by viability tier
+    const TIER_ORDER = ['viable','promising','borderline','not_viable','insufficient_data'];
+    const TIER_LABELS = {
+        viable: '✓ VIABLE',
+        promising: 'PROMISING',
+        borderline: 'BORDERLINE',
+        not_viable: 'NOT VIABLE',
+        insufficient_data: 'NEW (collecting data)',
+    };
+    if(!S._collapsedTiers) S._collapsedTiers = {not_viable: true}; // collapse not_viable by default
 
-        cards += `<div class="session-card ${cls}" onclick="navigate('session','${s.name}')">
-          <div class="sc-top"><div><span class="d mono" style="font-size:10px;font-weight:700">#${i+1}</span> <span class="sc-name">${s.name}</span>${vBadge}</div>
-          <div style="display:flex;align-items:center;gap:5px"><span class="sc-where">${s.architecture||'impulse_lag'}</span><span class="sc-where">${s.where}</span><div class="sc-dot ${active?'on':'off'}"></div></div></div>
-          <div class="sc-stats">
-            <div><div class="sc-stat-label">PnL</div><div class="sc-stat-value ${pc(p)}">${fp(p)}${dpnl}</div></div>
-            <div><div class="sc-stat-label">Win Rate</div><div class="sc-stat-value ${wc(w)}">${w}%${dwr}</div></div>
-            <div><div class="sc-stat-label">Trades</div><div class="sc-stat-value">${s.trades||0}${dtrades}</div></div>
-            <div><div class="sc-stat-label">$/Trade</div><div class="sc-stat-value ${pc(avgP)}">${s.trades>0?fps(avgP):'\u2014'}</div></div>
-          </div>
-          <div class="sc-bar"><div class="sc-bar-fill" style="width:${Math.min(100,w)}%;background:${bc}"></div></div>
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-top:6px;font-family:monospace">
-            <span>R²: <span style="color:${v.r_squared!=null && v.r_squared>=0.85?'#10b981':v.r_squared!=null && v.r_squared>=0.5?'#f59e0b':'#ef4444'}">${v.r_squared!=null?v.r_squared.toFixed(2):'—'}</span></span>
-            <span>6h+: <span style="color:${v.rolling_pct!=null && v.rolling_pct>=75?'#10b981':v.rolling_pct!=null && v.rolling_pct>=60?'#f59e0b':'#ef4444'}">${v.rolling_pct!=null?v.rolling_pct+'%':'—'}</span></span>
-            <span>w6h: <span style="color:${v.worst_6h!=null && v.worst_6h>=-500?'#10b981':v.worst_6h!=null && v.worst_6h>=-2000?'#f59e0b':'#ef4444'}">${v.worst_6h!=null?'$'+(v.worst_6h>0?'+':'')+v.worst_6h.toLocaleString():'—'}</span></span>
-            <span>Cal: <span style="color:${v.calmar!=null && v.calmar>=2?'#10b981':v.calmar!=null && v.calmar>=1?'#f59e0b':'#ef4444'}">${v.calmar!=null?v.calmar:'—'}</span></span>
-          </div>
-        </div>`;
+    const grouped = {};
+    sorted.forEach(s => {
+        const t = (s.viability||{}).viability || 'insufficient_data';
+        if(!grouped[t]) grouped[t] = [];
+        grouped[t].push(s);
     });
-    if (!filtered.length) cards = '<div class="empty"><div class="empty-title">No sessions match filter</div></div>';
+
+    let tableRows = '';
+    const COL_COUNT = 10;
+    TIER_ORDER.forEach(tier => {
+        if(!grouped[tier] || !grouped[tier].length) return;
+        const collapsed = S._collapsedTiers[tier];
+        const tierColor = tier==='viable'?'#10b981':tier==='promising'?'#3b82f6':tier==='borderline'?'#f59e0b':tier==='not_viable'?'#ef4444':'#6b7280';
+        tableRows += `<tr class="tier-divider ${collapsed?'collapsed':''}" onclick="ovToggleTier('${tier}')">
+          <td colspan="${COL_COUNT}"><span class="tier-arrow">▼</span><span style="color:${tierColor}">${TIER_LABELS[tier]}</span> <span style="color:var(--dim);font-weight:400;margin-left:6px">${grouped[tier].length} session${grouped[tier].length>1?'s':''}</span></td>
+        </tr>`;
+        if(collapsed) return;
+
+        grouped[tier].forEach(s => {
+            const p=s.pnl_taker||0, w=s.wr||0, active=s.status==='running'||s.status==='active';
+            const avgP=s.trades>0?p/s.trades:0;
+            const v = s.viability || {};
+            const verdict = v.viability || 'insufficient_data';
+            const vLabel = verdict==='viable'?'VIABLE':verdict==='promising'?'PROM':verdict==='borderline'?'BORDR':verdict==='not_viable'?'WEAK':'NEW';
+            const r2 = v.r_squared;
+            const r2Cls = r2==null?'d':r2>=0.85?'g':r2>=0.7?'cy':r2>=0.5?'y':'r';
+            const p6 = v.rolling_pct;
+            const p6Cls = p6==null?'d':p6>=75?'g':p6>=60?'cy':p6>=50?'y':'r';
+            const w6 = v.worst_6h;
+            const w6Cls = w6==null?'d':w6>=-500?'g':w6>=-2000?'cy':w6>=-3000?'y':'r';
+            const cal = v.calmar;
+            const calCls = cal==null?'d':cal>=2?'g':cal>=1.5?'cy':cal>=1?'y':'r';
+            const archShort = (s.architecture||'impulse_lag').replace(/_/g,' ').replace('oracle','OR').replace('impulse confirmed','IC').replace('impulse lag','IL').replace('cross pressure','XP').replace('certainty premium','CP');
+
+            // Delta badges — show change since last update
+            const dpnl = ovDeltaBadge('row_pnl_'+s.name, p, null, dv => '$'+(dv>=0?'+':'')+Math.round(dv).toLocaleString());
+            const dtrades = ovDeltaBadge('row_trades_'+s.name, s.trades||0, null, dv => '+'+dv);
+            const dwr = ovDeltaBadge('row_wr_'+s.name, w, null, dv => (dv>=0?'+':'')+dv.toFixed(1)+'pp');
+
+            tableRows += `<tr class="tier-${tier}" onclick="navigate('session','${s.name}')">
+              <td>
+                <div class="session-name">${s.name} <span class="live-dot ${active?'on':'off'}"></span></div>
+                <div class="session-arch">${archShort}</div>
+              </td>
+              <td><span class="v-badge ${verdict}">${vLabel}</span></td>
+              <td class="num">${s.trades||0}${dtrades}</td>
+              <td class="num ${pc(p)}">${fp(p)}${dpnl}</td>
+              <td class="num ${wc(w)}">${w.toFixed(0)}%${dwr}</td>
+              <td class="num ${pc(avgP)}">${s.trades>0?fps(avgP):'—'}</td>
+              <td class="num ${r2Cls}">${r2!=null?r2.toFixed(2):'—'}</td>
+              <td class="num ${p6Cls}">${p6!=null?p6.toFixed(0)+'%':'—'}</td>
+              <td class="num ${w6Cls}">${w6!=null?'$'+(w6>0?'+':'')+w6.toLocaleString():'—'}</td>
+              <td class="num ${calCls}">${cal!=null?cal.toFixed(2):'—'}</td>
+            </tr>`;
+        });
+    });
+    const tableHtml = !filtered.length
+        ? '<div class="empty"><div class="empty-title">No sessions match filter</div></div>'
+        : `<div class="table-scroll">
+          <table class="session-table">
+            <thead><tr>
+              <th>Session / Arch</th>
+              <th>Tier</th>
+              <th class="num">Trades</th>
+              <th class="num">PnL</th>
+              <th class="num">WR</th>
+              <th class="num">$/Tr</th>
+              <th class="num">R²</th>
+              <th class="num">6h+</th>
+              <th class="num">w6h</th>
+              <th class="num">Calmar</th>
+            </tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+          </div>`;
 
     // Compute runtime from session data
     const totalWindows=filtered.reduce((a,s)=>a+(s.windows_settled||0),0);
@@ -1608,34 +1849,50 @@ function renderOverview(el) {
         runtimeStr=rh>0?rh+'h '+rm+'m':rm+'m';
     }
 
-    // Split rendering: charts zone is preserved, only stats/cards are updated
+    // Split rendering: dynamic-zone for stats/filter, sessions-zone for table, charts in collapsible
     const chartsExist=el.querySelector('#ov-charts-zone');
     if(!chartsExist){
-        // First render — build full page including chart containers
+        // First render — build full page structure
+        const chartsOpen = S._chartsOpen ? 'open' : '';
+        const filterOpen = S._filterOpen ? 'open' : '';
         el.innerHTML = `
         <div id="ov-dynamic-zone"></div>
-        <div id="ov-charts-zone">
-          <div class="card" style="padding:16px;margin:12px 0">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <span class="d" style="font-size:11px">Cumulative PnL by Architecture</span>
-              <div style="display:flex;gap:6px;align-items:center">
-                <button class="btn btn-sm" id="ov-time-btn" style="font-size:10px;padding:2px 10px" onclick="ovToggleTimeAxis()">${S._ovTimeAxis?'Show by Trade #':'Show by Time'}</button>
-                <button class="btn btn-sm btn-blue" style="font-size:10px;padding:2px 10px" onclick="ovSyncChart()">Sync Chart</button>
+        <div id="ov-sessions-zone"></div>
+        <div class="section-collapsible ${filterOpen}" id="ov-filter-section" style="margin-top:14px">
+          <div class="section-collapsible-header" onclick="ovToggleFilter()">
+            <span><span class="arrow">▶</span> Architecture Filter</span>
+            <span class="d" style="font-size:9px;text-transform:none;letter-spacing:0">click to ${S._filterOpen?'collapse':'expand'}</span>
+          </div>
+          <div class="section-collapsible-body" id="ov-filter-zone"></div>
+        </div>
+        <div class="section-collapsible ${chartsOpen}" id="ov-charts-section" style="margin-top:8px">
+          <div class="section-collapsible-header" onclick="ovToggleCharts()">
+            <span><span class="arrow">▶</span> Performance Charts</span>
+            <span class="d" style="font-size:9px;text-transform:none;letter-spacing:0">click to ${S._chartsOpen?'collapse':'expand'}</span>
+          </div>
+          <div class="section-collapsible-body">
+            <div id="ov-charts-zone">
+              <div class="card" style="padding:16px;margin:0 0 12px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <span class="d" style="font-size:11px">Cumulative PnL by Architecture</span>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <button class="btn btn-sm" id="ov-time-btn" style="font-size:10px;padding:2px 10px" onclick="ovToggleTimeAxis()">${S._ovTimeAxis?'Show by Trade #':'Show by Time'}</button>
+                    <button class="btn btn-sm btn-blue" style="font-size:10px;padding:2px 10px" onclick="ovSyncChart()">Sync Chart</button>
+                  </div>
+                </div>
+                <div style="height:300px"><canvas id="ov-cum-chart"></canvas></div>
+              </div>
+              <div class="card" style="padding:16px;margin:0">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <span class="d" style="font-size:11px">Rolling Win Rate by Architecture</span>
+                </div>
+                <div style="height:250px"><canvas id="ov-wr-chart"></canvas></div>
               </div>
             </div>
-            <div style="height:300px"><canvas id="ov-cum-chart"></canvas></div>
           </div>
-          <div class="card" style="padding:16px;margin:0 0 12px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <span class="d" style="font-size:11px">Rolling Win Rate by Architecture</span>
-            </div>
-            <div style="height:250px"><canvas id="ov-wr-chart"></canvas></div>
-          </div>
-        </div>
-        <div id="ov-sessions-zone"></div>
-        <div id="ov-compare-zone-outer" style="margin-top:20px"></div>`;
-        // Initial chart load
-        if(!S._ovChartLoading){
+        </div>`;
+        // Lazy chart load only when expanded
+        if(S._chartsOpen && !S._ovChartLoading){
             S._ovChartLoading=true;
             api('/api/chart-data').then(d=>{S._ovChartData=d;S._ovChartLoading=false;ovBuildCumChart()}).catch(()=>{S._ovChartLoading=false});
         }
@@ -1649,106 +1906,441 @@ function renderOverview(el) {
     const dwr=ovDeltaBadge('wr',wrNum,S._ovPrev.wr,d=>d.toFixed(1)+'pp');
     S._ovPrev={pnl:pnlNum,trades:tot,wr:wrNum};
 
-    // Update dynamic zone (stats + filters) — no chart destruction
-    document.getElementById('ov-dynamic-zone').innerHTML = `
-    <div class="section-header"><div class="section-title">Overview</div><div class="d mono" style="font-size:10px">Updated ${new Date().toLocaleTimeString()}</div></div>
-    <div class="stats-grid">
-      <div class="stat-box"><div class="stat-label">Total PnL${S._ovArchSet.size>0?' ('+S._ovArchSet.size+' arch)':''}</div><div class="stat-value ${pc(pnl)}">${fp(pnl)}${dpnl}</div><div class="stat-sub">${fps(avg)} / trade</div></div>
-      <div class="stat-box"><div class="stat-label">Total Trades</div><div class="stat-value b">${tot.toLocaleString()}${dtrades}</div><div class="stat-sub">${filtered.length}${S._ovArchSet.size>0?' / '+ss.length:''} sessions</div></div>
-      <div class="stat-box"><div class="stat-label">Win Rate</div><div class="stat-value ${wc(wr)}">${wr}%${dwr}</div><div class="stat-sub">${wins}W / ${tot-wins}L</div></div>
-      <div class="stat-box"><div class="stat-label">Runtime</div><div class="stat-value cy">${runtimeStr}</div><div class="stat-sub">${totalWindows} windows settled</div></div>
-      <div class="stat-box"><div class="stat-label">Active</div><div class="stat-value ${act>0?'g':'d'}">${act}</div><div class="stat-sub">sessions running</div></div>
-      ${(()=>{
-        const allWins=[];
-        Object.values(_sseVpsCache).forEach(d=>{(d.recent_windows||[]).forEach(w=>allWins.push(w))});
-        allWins.sort((a,b)=>(a.window_start||0)-(b.window_start||0));
-        const unique=[];const seen=new Set();
-        allWins.forEach(w=>{const k=w.window_start;if(!seen.has(k)){seen.add(k);unique.push(w.outcome)}});
-        const last10=unique.slice(-10);
-        if(last10.length<4) return '<div class="stat-box"><div class="stat-label">Regime</div><div class="stat-value d">...</div><div class="stat-sub">waiting for data</div></div>';
-        const alts=last10.slice(1).reduce((n,o,i)=>n+(o!==last10[i]?1:0),0);
-        const altRate=alts/(last10.length-1);
+    // Compute regime
+    const allWinsArr=[];
+    Object.values(_sseVpsCache).forEach(d=>{(d.recent_windows||[]).forEach(w=>allWinsArr.push(w))});
+    allWinsArr.sort((a,b)=>(a.window_start||0)-(b.window_start||0));
+    const uniqueOutcomes=[];const seenWs=new Set();
+    allWinsArr.forEach(w=>{const k=w.window_start;if(!seenWs.has(k)){seenWs.add(k);uniqueOutcomes.push(w.outcome)}});
+    const last10reg=uniqueOutcomes.slice(-10);
+    let regimeBox = '<div class="stat-box"><div class="stat-label">Regime</div><div class="stat-value d">…</div><div class="stat-sub">waiting</div></div>';
+    if(last10reg.length>=4){
+        const alts=last10reg.slice(1).reduce((n,o,i)=>n+(o!==last10reg[i]?1:0),0);
+        const altRate=alts/(last10reg.length-1);
         const regime=altRate>=0.70?'CHOP':altRate<=0.35?'TREND':'MIX';
         const rc=regime==='TREND'?'g':regime==='CHOP'?'r':'cy';
-        const dots=last10.map(o=>o==='Up'?'<span style="color:#10b981">U</span>':'<span style="color:#ef4444">D</span>').join(' ');
-        return '<div class="stat-box"><div class="stat-label">Regime</div><div class="stat-value '+rc+'">'+regime+'</div><div class="stat-sub" style="font-size:10px">'+dots+' <span class="d">('+Math.round(altRate*100)+'% alt)</span></div></div>';
-      })()}
-      ${(()=>{
-        // Memory monitor — fetched async, cached in S._memInfo
-        const m = S._memInfo;
-        if(!m) {
-          if(!S._memLoading) {
-            S._memLoading = true;
-            api('/api/system-mem').then(d=>{S._memInfo=d;S._memLoading=false;}).catch(()=>{S._memLoading=false;});
-          }
-          return '<div class="stat-box"><div class="stat-label">VPS Memory</div><div class="stat-value d">...</div><div class="stat-sub">checking</div></div>';
-        }
-        const pct = m.pct_used || 0;
-        const cls = pct >= 90 ? 'r' : pct >= 80 ? 'cy' : pct >= 70 ? 'cy' : 'g';
-        const warn = pct >= 90 ? ' ⚠️ CRITICAL' : pct >= 80 ? ' ⚠️' : '';
-        return '<div class="stat-box"><div class="stat-label">VPS Memory</div><div class="stat-value '+cls+'">'+pct.toFixed(0)+'%'+warn+'</div><div class="stat-sub">'+m.used_mb+'/'+m.total_mb+' MB | '+m.available_mb+' MB free</div></div>';
-      })()}
+        regimeBox = '<div class="stat-box"><div class="stat-label">Regime</div><div class="stat-value '+rc+'">'+regime+'</div><div class="stat-sub">'+Math.round(altRate*100)+'% alternation</div></div>';
+    }
+
+    // Memory box
+    const m = S._memInfo;
+    if(!m && !S._memLoading) {
+        S._memLoading = true;
+        api('/api/system-mem').then(d=>{S._memInfo=d;S._memLoading=false;}).catch(()=>{S._memLoading=false;});
+    }
+    let memBox = '<div class="stat-box"><div class="stat-label">VPS Memory</div><div class="stat-value d">…</div><div class="stat-sub">checking</div></div>';
+    if(m){
+        const pctMem = m.pct_used || 0;
+        const memCls = pctMem >= 90 ? 'r' : pctMem >= 80 ? 'y' : pctMem >= 70 ? 'cy' : 'g';
+        const warn = pctMem >= 90 ? ' ⚠️' : pctMem >= 80 ? ' ⚠' : '';
+        memBox = '<div class="stat-box"><div class="stat-label">VPS Memory</div><div class="stat-value '+memCls+'">'+pctMem.toFixed(0)+'%'+warn+'</div><div class="stat-sub">'+m.available_mb+' MB free</div></div>';
+    }
+
+    // Tier counts for the "Active sessions" sub
+    const tierCounts = {};
+    sorted.forEach(s => {
+        const t = (s.viability||{}).viability || 'insufficient_data';
+        tierCounts[t] = (tierCounts[t]||0) + 1;
+    });
+    const tierSummary = ['viable','promising','borderline','not_viable','insufficient_data']
+        .filter(t => tierCounts[t])
+        .map(t => {
+            const c = t==='viable'?'#10b981':t==='promising'?'#3b82f6':t==='borderline'?'#f59e0b':t==='not_viable'?'#ef4444':'#6b7280';
+            const l = t==='viable'?'V':t==='promising'?'P':t==='borderline'?'B':t==='not_viable'?'X':'·';
+            return `<span style="color:${c};font-weight:700">${l}${tierCounts[t]}</span>`;
+        }).join(' ');
+
+    // Update dynamic zone — compact 4-stat header
+    const stoppedCount = (S._totalSessionCount || 0) - (S._activeSessionCount || 0);
+    const showStoppedToggle = stoppedCount > 0
+        ? `<button class="btn btn-sm" style="font-size:10px;padding:3px 8px" onclick="ovToggleStopped()">${S._showStopped ? '✓ Showing stopped' : 'Show '+stoppedCount+' stopped'}</button>`
+        : '';
+    // Period filter buttons (1h / 4h / 8h / 12h / 1d / all)
+    const periods = [
+        {k:'1h',l:'1h'}, {k:'4h',l:'4h'}, {k:'8h',l:'8h'},
+        {k:'12h',l:'12h'}, {k:'1d',l:'1d'}, {k:'all',l:'All'}
+    ];
+    const periodBtns = periods.map(p => {
+        const active = (S._ovPeriod || 'all') === p.k;
+        return `<button class="btn btn-sm${active?' btn-blue':''}" style="font-size:10px;padding:3px 8px" onclick="ovSetPeriod('${p.k}')">${p.l}</button>`;
+    }).join('');
+
+    const periodLabel = (S._ovPeriod && S._ovPeriod !== 'all')
+        ? `<span class="d mono" style="font-size:10px;color:var(--yellow)">last ${S._ovPeriod}</span>`
+        : '';
+
+    document.getElementById('ov-dynamic-zone').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">Portfolio ${periodLabel}</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:3px" id="ov-period-filter-btns">${periodBtns}</div>
+        ${showStoppedToggle}
+        <div class="d mono" style="font-size:10px">Updated ${new Date().toLocaleTimeString()}${S._ovArchSet.size>0?' · '+S._ovArchSet.size+' arch filter':''}</div>
+      </div>
     </div>
-    <div style="margin:14px 0 6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      <span class="d" style="font-size:10px;margin-right:4px">FILTER</span>${archPills}
+    <div class="compact-stats">
+      <div class="stat-box"><div class="stat-label">Total PnL</div><div class="stat-value ${pc(pnl)}">${fp(pnl)}${dpnl}</div><div class="stat-sub">${tot.toLocaleString()} trades · ${fps(avg)}/t</div></div>
+      <div class="stat-box"><div class="stat-label">Sessions</div><div class="stat-value cy">${act}<span style="font-size:13px;color:var(--dim);margin-left:4px">/ ${filtered.length}</span></div><div class="stat-sub" style="font-family:monospace">${tierSummary || '—'}</div></div>
+      ${regimeBox}
+      ${memBox}
     </div>`;
 
-    // Update sessions zone
+    // Update sessions zone — NEW compact table
     document.getElementById('ov-sessions-zone').innerHTML = `
-    <div class="section-header" style="margin-top:10px">
+    <div class="section-header" style="margin-top:6px">
       <div class="section-title">Sessions</div>
       <div style="display:flex;gap:4px;align-items:center"><span class="d" style="font-size:10px;margin-right:4px">SORT</span>${sortBtns}</div>
     </div>
-    <div class="sessions-grid">${cards}</div>`;
-    S.lastDataJSON = JSON.stringify(ss);
+    ${tableHtml}`;
 
-    // Lazy-load A/B comparison panel — into the OUTER zone (sibling of sessions, not a child)
-    // so it doesn't get blown away on session re-renders
-    if(!S._compareLoaded || (Date.now() - (S._compareLoadedAt||0) > 30000)) {
-        S._compareLoaded = true;
-        S._compareLoadedAt = Date.now();
-        api('/api/comparisons').then(data => {
-            const zone = document.getElementById('ov-compare-zone-outer');
-            if(!zone || !Array.isArray(data) || !data.length) return;
-            let html = '<div class="section-header" style="margin-top:14px"><div class="section-title">A/B Comparisons (Lax vs Strict)</div></div>';
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:10px">';
-            data.forEach(pair => {
-                const lv = (pair.lax.viability||{});
-                const sv = (pair.strict.viability||{});
-                const fmtR2 = v => v!=null?v.toFixed(2):'—';
-                const fmtPct = v => v!=null?v.toFixed(0)+'%':'—';
-                const fmtMoney = v => v!=null?'$'+(v>0?'+':'')+Math.round(v).toLocaleString():'—';
-                const fmtCal = v => v!=null?v.toFixed(2):'—';
-                const tag = (verdict) => {
-                    const c = verdict==='viable'?'#10b981':verdict==='promising'?'#3b82f6':verdict==='borderline'?'#f59e0b':verdict==='not_viable'?'#ef4444':'#6b7280';
-                    const l = verdict==='viable'?'VIABLE':verdict==='promising'?'PROMISING':verdict==='borderline'?'BORDER':verdict==='not_viable'?'NOT VIABLE':'NEW';
-                    return `<span style="font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;background:${c}22;color:${c};border:1px solid ${c}">${l}</span>`;
-                };
-                html += `<div class="card" style="padding:12px">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                    <div style="font-weight:600;font-size:12px">${pair.name}</div>
-                  </div>
-                  <table style="width:100%;font-size:11px;font-family:monospace;border-collapse:collapse">
-                    <tr style="color:var(--dim);text-align:right">
-                      <td style="text-align:left">Metric</td>
-                      <td>${pair.lax.session.replace('oracle_','')}</td>
-                      <td>${pair.strict.session.replace('oracle_','')}</td>
-                    </tr>
-                    <tr><td style="color:var(--dim)">Trades</td><td style="text-align:right">${pair.lax.trades}</td><td style="text-align:right">${pair.strict.trades}</td></tr>
-                    <tr><td style="color:var(--dim)">PnL</td><td style="text-align:right;color:${pair.lax.pnl>=0?'#10b981':'#ef4444'}">${fmtMoney(pair.lax.pnl)}</td><td style="text-align:right;color:${pair.strict.pnl>=0?'#10b981':'#ef4444'}">${fmtMoney(pair.strict.pnl)}</td></tr>
-                    <tr><td style="color:var(--dim)">Win Rate</td><td style="text-align:right">${pair.lax.wr.toFixed(0)}%</td><td style="text-align:right">${pair.strict.wr.toFixed(0)}%</td></tr>
-                    <tr><td style="color:var(--dim)">R²</td><td style="text-align:right">${fmtR2(lv.r_squared)}</td><td style="text-align:right">${fmtR2(sv.r_squared)}</td></tr>
-                    <tr><td style="color:var(--dim)">6h+</td><td style="text-align:right">${fmtPct(lv.rolling_pct)}</td><td style="text-align:right">${fmtPct(sv.rolling_pct)}</td></tr>
-                    <tr><td style="color:var(--dim)">Worst 6h</td><td style="text-align:right">${fmtMoney(lv.worst_6h)}</td><td style="text-align:right">${fmtMoney(sv.worst_6h)}</td></tr>
-                    <tr><td style="color:var(--dim)">Calmar</td><td style="text-align:right">${fmtCal(lv.calmar)}</td><td style="text-align:right">${fmtCal(sv.calmar)}</td></tr>
-                    <tr><td style="color:var(--dim)">Verdict</td><td style="text-align:right">${tag(lv.viability||'insufficient_data')}</td><td style="text-align:right">${tag(sv.viability||'insufficient_data')}</td></tr>
-                  </table>
-                </div>`;
-            });
-            html += '</div>';
-            zone.innerHTML = html;
-        }).catch(()=>{});
+    // Update filter zone (collapsible)
+    const filterZone = document.getElementById('ov-filter-zone');
+    if(filterZone) filterZone.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap">${archPills}</div>`;
+
+    S.lastDataJSON = JSON.stringify(ss);
+}
+
+// ═══ Compare Page (N-way) ═══
+function renderCompare(el) {
+    if(!S._cmpSelected) S._cmpSelected = new Set();
+
+    const allSessions = [...(S.sessions||[])].sort((a,b)=>{
+        const order={'viable':5,'promising':4,'borderline':3,'not_viable':2,'insufficient_data':1};
+        const va=order[(a.viability||{}).viability]||0;
+        const vb=order[(b.viability||{}).viability]||0;
+        if(va!==vb) return vb-va;
+        return (b.pnl_taker||0)-(a.pnl_taker||0);
+    });
+
+    if(!allSessions.length) {
+        el.innerHTML = '<div class="empty"><div class="empty-title">No sessions available</div></div>';
+        return;
     }
+
+    // First visit — auto-select top 2 by viability
+    if(S._cmpSelected.size === 0 && !S._cmpInitialized) {
+        S._cmpInitialized = true;
+        if(allSessions[0]) S._cmpSelected.add(allSessions[0].name);
+        if(allSessions[1]) S._cmpSelected.add(allSessions[1].name);
+    }
+
+    const PRESETS = [
+        {label:'Pulse pair', sessions:['oracle_pulse','oracle_pulse_strict']},
+        {label:'Arb pair', sessions:['oracle_arb','oracle_arb_tight']},
+        {label:'Consensus pair', sessions:['oracle_consensus','oracle_consensus_strict']},
+        {label:'Chrono pair', sessions:['oracle_chrono','oracle_chrono_aggressive']},
+        {label:'All Promising', sessions:allSessions.filter(s=>(s.viability||{}).viability==='promising').map(s=>s.name)},
+        {label:'Oracle family', sessions:allSessions.filter(s=>s.name.startsWith('oracle')).map(s=>s.name)},
+        {label:'Multi-source', sessions:['blitz_1','test_ic_wide','test_xp','edge_hunter']},
+        {label:'Top 4 by PnL', sessions:[...allSessions].sort((a,b)=>(b.pnl_taker||0)-(a.pnl_taker||0)).slice(0,4).map(s=>s.name)},
+        {label:'Clear', sessions:[]},
+    ];
+    const presetButtons = PRESETS.map(p =>
+        `<button class="btn btn-sm" style="font-size:10px;padding:4px 10px" onclick="cmpSetPreset(${JSON.stringify(p.sessions).replace(/"/g,'&quot;')})">${p.label}</button>`
+    ).join('');
+
+    // Build the multi-select pill grid
+    const pillGrid = allSessions.map(s => {
+        const checked = S._cmpSelected.has(s.name);
+        const v = s.viability || {};
+        const verdict = v.viability || 'insufficient_data';
+        const vColor = verdict==='viable'?'#10b981':verdict==='promising'?'#3b82f6':verdict==='borderline'?'#f59e0b':verdict==='not_viable'?'#ef4444':'#6b7280';
+        return `<div class="cmp-pill ${checked?'selected':''}" onclick="cmpToggle('${s.name}')" style="border-color:${checked?vColor:'var(--border)'}">
+          <span class="cmp-pill-name">${s.name}</span>
+          <span class="cmp-pill-arch">${(s.architecture||'').replace(/_/g,' ')}</span>
+          <span class="cmp-pill-pnl ${pc(s.pnl_taker||0)}">${fp(s.pnl_taker||0)}</span>
+        </div>`;
+    }).join('');
+
+    // Build the comparison table (N sessions as columns)
+    const selected = allSessions.filter(s => S._cmpSelected.has(s.name));
+    let compareTable = '';
+    if(selected.length === 0) {
+        compareTable = '<div class="empty" style="padding:24px"><div class="empty-title">Select sessions above to compare</div></div>';
+    } else {
+        // Header row with session names
+        const headerCells = selected.map(s => {
+            const v = s.viability || {};
+            const verdict = v.viability || 'insufficient_data';
+            const vLabel = verdict==='viable'?'VIABLE':verdict==='promising'?'PROM':verdict==='borderline'?'BORDR':verdict==='not_viable'?'WEAK':'NEW';
+            return `<th class="num">
+              <div class="cmp-h-name">${s.name}</div>
+              <div class="cmp-h-arch">${(s.architecture||'').replace(/_/g,' ')}</div>
+              <div><span class="v-badge ${verdict}">${vLabel}</span></div>
+            </th>`;
+        }).join('');
+
+        // Helper: build a metric row
+        const metricRow = (label, getter, fmtFn, classFn, betterIsHigher=true) => {
+            const values = selected.map(getter);
+            // Find best/worst for highlighting
+            const validValues = values.filter(v => v != null && !isNaN(v));
+            const best = validValues.length ? (betterIsHigher ? Math.max(...validValues) : Math.min(...validValues)) : null;
+            const worst = validValues.length ? (betterIsHigher ? Math.min(...validValues) : Math.max(...validValues)) : null;
+            const cells = values.map(v => {
+                if(v == null || isNaN(v)) return '<td class="num d">—</td>';
+                let style = '';
+                if(validValues.length > 1) {
+                    if(v === best && best !== worst) style = ';color:#10b981;font-weight:700';
+                    else if(v === worst && best !== worst) style = ';color:#ef4444';
+                }
+                const cls = classFn ? classFn(v) : '';
+                return `<td class="num ${cls}" style="${style}">${fmtFn(v)}</td>`;
+            }).join('');
+            return `<tr><td class="cmp-label">${label}</td>${cells}</tr>`;
+        };
+
+        compareTable = `<div class="table-scroll" style="margin-top:14px">
+          <table class="session-table cmp-table">
+            <thead><tr><th class="cmp-label">Metric</th>${headerCells}</tr></thead>
+            <tbody>
+              ${metricRow('Trades', s=>s.trades||0, v=>v.toLocaleString(), null, true)}
+              ${metricRow('Win Rate', s=>s.wr||0, v=>v.toFixed(1)+'%', wc, true)}
+              ${metricRow('PnL', s=>s.pnl_taker||0, v=>fp(v), pc, true)}
+              ${metricRow('$/Trade', s=>s.trades>0?(s.pnl_taker||0)/s.trades:null, v=>fps(v), pc, true)}
+              ${metricRow('R²', s=>(s.viability||{}).r_squared, v=>v.toFixed(3), null, true)}
+              ${metricRow('% 6h+', s=>(s.viability||{}).rolling_pct, v=>v.toFixed(0)+'%', null, true)}
+              ${metricRow('Worst 6h', s=>(s.viability||{}).worst_6h, v=>'$'+(v>0?'+':'')+v.toLocaleString(), null, true)}
+              ${metricRow('Calmar', s=>(s.viability||{}).calmar, v=>v.toFixed(2), null, true)}
+              ${metricRow('Max DD', s=>(s.viability||{}).max_dd, v=>'$'+v.toLocaleString(), null, false)}
+              ${metricRow('Flags', s=>(s.viability||{}).flags_passed, v=>v+'/4', null, true)}
+            </tbody>
+          </table>
+          </div>`;
+    }
+
+    // Time period buttons
+    const periods = [
+        {label:'1h', hours:1}, {label:'4h', hours:4}, {label:'12h', hours:12},
+        {label:'24h', hours:24}, {label:'All', hours:0}
+    ];
+    if(S._cmpPeriod === undefined) S._cmpPeriod = 0; // default 'all'
+    const periodButtons = periods.map(p =>
+        `<button class="btn btn-sm${S._cmpPeriod===p.hours?' btn-blue':''}" style="font-size:10px;padding:4px 10px" onclick="cmpSetPeriod(${p.hours})">${p.label}</button>`
+    ).join('');
+
+    el.innerHTML = `
+    <div class="compare-page">
+      <div class="section-header">
+        <div class="section-title">Compare Sessions</div>
+        <div class="d mono" style="font-size:10px">${S._cmpSelected.size} selected — best in <span style="color:#10b981">green</span>, worst in <span style="color:#ef4444">red</span></div>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-right:4px">Period:</span>
+        ${periodButtons}
+        <span class="d" style="font-size:10px;margin-left:8px">${S._cmpPeriod===0?'showing all data':'showing last '+S._cmpPeriod+'h only'}</span>
+      </div>
+
+      <div class="compare-presets">
+        <span class="preset-label">Presets:</span>
+        ${presetButtons}
+      </div>
+
+      <div class="cmp-pill-grid">${pillGrid}</div>
+
+      ${compareTable}
+
+      <div id="correlation-zone" style="margin-top:24px"></div>
+    </div>`;
+
+    // Lazy-load correlation matrix
+    const corrUrl = '/api/correlations' + (S._cmpPeriod>0 ? '?hours='+S._cmpPeriod : '');
+    api(corrUrl).then(d => {
+        const zone = document.getElementById('correlation-zone');
+        if(!zone || !d || !d.sessions || !d.sessions.length) return;
+        const sessions = d.sessions;
+        const matrix = d.matrix;
+
+        let cells = '<th class="cmp-label" style="font-size:9px"></th>';
+        sessions.forEach(s => {
+            const short = s.replace('oracle_','OR_').slice(0,12);
+            cells += `<th class="num" style="font-size:9px;writing-mode:vertical-rl;transform:rotate(180deg);min-width:32px;padding:6px 2px">${short}</th>`;
+        });
+
+        let rows = '';
+        sessions.forEach((s1, i) => {
+            const short = s1.replace('oracle_','OR_').slice(0,16);
+            let row = `<td class="cmp-label" style="font-size:9px">${short}</td>`;
+            matrix[i].forEach((c, j) => {
+                if(i === j) {
+                    row += `<td class="num" style="background:#1a1f2e;color:var(--dim);font-size:10px">—</td>`;
+                } else if(c === null) {
+                    row += `<td class="num d" style="font-size:10px">·</td>`;
+                } else {
+                    // Color: green=independent (low corr), red=highly correlated
+                    let bg, color;
+                    if(c >= 0.7) { bg = 'rgba(239,68,68,.25)'; color = '#ef4444'; }
+                    else if(c >= 0.4) { bg = 'rgba(245,158,11,.18)'; color = '#f59e0b'; }
+                    else if(c >= 0.0) { bg = 'transparent'; color = '#10b981'; }
+                    else { bg = 'rgba(59,130,246,.15)'; color = '#3b82f6'; }
+                    row += `<td class="num" style="background:${bg};color:${color};font-weight:600;font-size:10px">${c.toFixed(2)}</td>`;
+                }
+            });
+            rows += `<tr>${row}</tr>`;
+        });
+
+        // Compute oracle vs non-oracle averages
+        let oracleSum = 0, oracleN = 0, otherSum = 0, otherN = 0, crossSum = 0, crossN = 0;
+        sessions.forEach((s1, i) => {
+            sessions.forEach((s2, j) => {
+                if(i >= j) return;
+                const c = matrix[i][j];
+                if(c === null) return;
+                const o1 = s1.indexOf('oracle') >= 0 || s1 === 'smooth_seeker';
+                const o2 = s2.indexOf('oracle') >= 0 || s2 === 'smooth_seeker';
+                if(o1 && o2) { oracleSum += c; oracleN++; }
+                else if(!o1 && !o2) { otherSum += c; otherN++; }
+                else { crossSum += c; crossN++; }
+            });
+        });
+
+        const stats = `
+          <div style="display:flex;gap:18px;font-size:11px;font-family:monospace;margin-top:10px">
+            <div><span class="d">Oracle ↔ Oracle avg:</span> <span style="color:${oracleN && oracleSum/oracleN>=0.5?'#ef4444':'#10b981'};font-weight:700">${oracleN?(oracleSum/oracleN).toFixed(2):'—'}</span> <span class="d">(${oracleN} pairs)</span></div>
+            <div><span class="d">Non-Oracle ↔ Non-Oracle avg:</span> <span style="color:${otherN && otherSum/otherN>=0.5?'#ef4444':'#10b981'};font-weight:700">${otherN?(otherSum/otherN).toFixed(2):'—'}</span> <span class="d">(${otherN} pairs)</span></div>
+            <div><span class="d">Cross-family avg:</span> <span style="font-weight:700">${crossN?(crossSum/crossN).toFixed(2):'—'}</span> <span class="d">(${crossN} pairs)</span></div>
+          </div>`;
+
+        zone.innerHTML = `
+          <div class="section-header" style="margin-top:14px"><div class="section-title">Correlation Matrix (Hourly PnL)</div><div class="d mono" style="font-size:10px">${S._cmpPeriod===0?'all data':'last '+S._cmpPeriod+'h'} — ${sessions.length} sessions</div></div>
+          <div class="d" style="font-size:10px;margin-bottom:8px">Higher correlation = sessions move together (less diversification). <span style="color:#10b981">Green</span>=independent, <span style="color:#f59e0b">amber</span>=moderate, <span style="color:#ef4444">red</span>=highly correlated, <span style="color:#3b82f6">blue</span>=anti-correlated</div>
+          <div class="table-scroll">
+            <table class="session-table cmp-table" style="min-width:auto">
+              <thead><tr>${cells}</tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          ${stats}`;
+    }).catch(()=>{});
+}
+
+function cmpToggle(name){
+    if(!S._cmpSelected) S._cmpSelected = new Set();
+    if(S._cmpSelected.has(name)) S._cmpSelected.delete(name);
+    else S._cmpSelected.add(name);
+    renderCompare(document.getElementById('content'));
+}
+function cmpSetPreset(names){
+    S._cmpSelected = new Set(names);
+    renderCompare(document.getElementById('content'));
+}
+function cmpSetPeriod(hours){
+    S._cmpPeriod = hours;
+    renderCompare(document.getElementById('content'));
+}
+
+// ═══ Session detail period filter + chart ═══
+function sessSetPeriod(name, hours){
+    S._sessPeriod = hours;
+    renderSession(document.getElementById('content'));
+    setTimeout(()=>buildSessionTrendChart(name), 100);
+}
+
+function _filterTradesByPeriod(trades, hours){
+    if(!hours) return trades;
+    const cutoff = Date.now()/1000 - hours * 3600;
+    return trades.filter(t => parseFloat(t.timestamp||0) >= cutoff);
+}
+
+function _recomputePeriodStats(trades, hours){
+    const filtered = _filterTradesByPeriod(trades, hours);
+    let pnl=0, wins=0, n=0;
+    filtered.forEach(t => {
+        const r = (t.result||'').trim();
+        if(r === 'WIN' || r === 'LOSS') {
+            n++;
+            if(r === 'WIN') wins++;
+            pnl += parseFloat(t.pnl_taker||0);
+        }
+    });
+    return {n, wins, pnl, wr: n>0?wins/n*100:0, avg: n>0?pnl/n:0};
+}
+
+let _sessTrendChart = null;
+function buildSessionTrendChart(name){
+    const canvas = document.getElementById('sess-pnl-trend');
+    if(!canvas || !window.Chart) return;
+    const ctx = canvas.getContext('2d');
+    if(_sessTrendChart) { try { _sessTrendChart.destroy(); } catch(e){} _sessTrendChart=null; }
+
+    const bucketMin = (S._sessPeriod && S._sessPeriod <= 4) ? 15 : 60;
+    api('/api/session-pnl-series/'+name+'?bucket_minutes='+bucketMin).then(d => {
+        let buckets = d.buckets || [];
+        if(S._sessPeriod) {
+            const cutoff = Date.now()/1000 - S._sessPeriod * 3600;
+            buckets = buckets.filter(b => b.ts >= cutoff);
+        }
+        if(!buckets.length) return;
+
+        // Recompute cumulative for the filtered window
+        let cum = 0;
+        const cumPoints = [];
+        const barPoints = [];
+        const labels = [];
+        buckets.forEach(b => {
+            cum += b.pnl;
+            cumPoints.push(cum);
+            barPoints.push(b.pnl);
+            labels.push(new Date(b.ts*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}));
+        });
+
+        _sessTrendChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        type: 'line',
+                        label: 'Cumulative PnL',
+                        data: cumPoints,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16,185,129,.08)',
+                        borderWidth: 2,
+                        tension: 0.25,
+                        fill: true,
+                        yAxisID: 'y',
+                        order: 1,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Bucket PnL',
+                        data: barPoints,
+                        backgroundColor: barPoints.map(v => v >= 0 ? 'rgba(16,185,129,.5)' : 'rgba(239,68,68,.5)'),
+                        borderColor: barPoints.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+                        borderWidth: 1,
+                        yAxisID: 'y1',
+                        order: 2,
+                    },
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { labels: { color: '#d1d5e0', font: { size: 10 } } },
+                    tooltip: {
+                        backgroundColor: '#0a0e1a',
+                        borderColor: '#1f2937',
+                        borderWidth: 1,
+                        titleColor: '#d1d5e0',
+                        bodyColor: '#d1d5e0',
+                        callbacks: {
+                            label: ctx => ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(0)
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#5a6478', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }, grid: { color: 'rgba(26,34,54,.5)' } },
+                    y: { position: 'left', ticks: { color: '#10b981', font: { size: 10 }, callback: v => '$'+v }, grid: { color: 'rgba(26,34,54,.5)' }, title: { display: true, text: 'Cumulative', color: '#10b981', font: { size: 9 } } },
+                    y1: { position: 'right', ticks: { color: '#5a6478', font: { size: 10 }, callback: v => '$'+v }, grid: { display: false }, title: { display: true, text: 'Per Bucket', color: '#5a6478', font: { size: 9 } } },
+                }
+            }
+        });
+    }).catch(()=>{});
 }
 
 // ═══ Session Detail ═══
@@ -1828,6 +2420,31 @@ function renderSession(el) {
     const active=meta.status==='running'||meta.status==='active';
     const avgPnl=csvTrades>0?(csvPnl/csvTrades):0;
 
+    // Viability section (from S.sessions metadata)
+    const v = (meta.viability)||{};
+    const verdict = v.viability || 'insufficient_data';
+    const vColor = verdict==='viable'?'#10b981':verdict==='promising'?'#3b82f6':verdict==='borderline'?'#f59e0b':verdict==='not_viable'?'#ef4444':'#6b7280';
+    const vLabel = verdict==='viable'?'VIABLE':verdict==='promising'?'PROMISING':verdict==='borderline'?'BORDERLINE':verdict==='not_viable'?'NOT VIABLE':'INSUFFICIENT DATA';
+    const vBadgeBig = `<span style="display:inline-block;font-size:11px;font-weight:700;padding:4px 10px;border-radius:4px;background:${vColor}22;color:${vColor};border:1px solid ${vColor};letter-spacing:.6px">${vLabel}</span>`;
+    const fmtV = (val,fmt) => val==null?'—':fmt(val);
+    const r2Cls = v.r_squared==null?'d':v.r_squared>=0.85?'g':v.r_squared>=0.7?'cy':v.r_squared>=0.5?'y':'r';
+    const p6Cls = v.rolling_pct==null?'d':v.rolling_pct>=75?'g':v.rolling_pct>=60?'cy':v.rolling_pct>=50?'y':'r';
+    const w6Cls = v.worst_6h==null?'d':v.worst_6h>=-500?'g':v.worst_6h>=-2000?'cy':v.worst_6h>=-3000?'y':'r';
+    const calCls = v.calmar==null?'d':v.calmar>=2?'g':v.calmar>=1.5?'cy':v.calmar>=1?'y':'r';
+    const viabilityHtml = `
+    <div class="card" style="padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Viability — Live-trading readiness</div>
+        ${vBadgeBig} <span class="d mono" style="font-size:10px">${v.flags_passed||0} / 4 flags passed</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        <div class="stat-box" style="padding:10px 12px"><div class="stat-label">Linearity (R²)</div><div class="stat-value ${r2Cls}" style="font-size:18px">${fmtV(v.r_squared,x=>x.toFixed(3))}</div><div class="stat-sub">target: ≥0.85</div></div>
+        <div class="stat-box" style="padding:10px 12px"><div class="stat-label">% 6h Positive</div><div class="stat-value ${p6Cls}" style="font-size:18px">${fmtV(v.rolling_pct,x=>x.toFixed(0)+'%')}</div><div class="stat-sub">target: ≥75%</div></div>
+        <div class="stat-box" style="padding:10px 12px"><div class="stat-label">Worst 6h</div><div class="stat-value ${w6Cls}" style="font-size:18px">${fmtV(v.worst_6h,x=>'$'+(x>0?'+':'')+x.toLocaleString())}</div><div class="stat-sub">target: > -$500</div></div>
+        <div class="stat-box" style="padding:10px 12px"><div class="stat-label">Calmar</div><div class="stat-value ${calCls}" style="font-size:18px">${fmtV(v.calmar,x=>x.toFixed(2))}</div><div class="stat-sub">target: ≥2.0</div></div>
+      </div>
+    </div>`;
+
     el.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:12px">
@@ -1857,12 +2474,33 @@ function renderSession(el) {
       <div><div class="live-label">NO Book</div><div class="live-value">Bid <span class="g" id="live-nobid">${noBid}</span> / Ask <span class="r" id="live-noask">${noAsk}</span></div></div>
       <div><div class="live-label">Updated</div><div class="live-value d" id="live-updated">${ago(d.updated)}</div></div>
     </div>
-    <div class="stats-grid">
+    <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-right:4px">Period:</span>
+      <button class="btn btn-sm${S._sessPeriod===1?' btn-blue':''}" style="font-size:10px;padding:4px 10px" onclick="sessSetPeriod('${name}',1)">1h</button>
+      <button class="btn btn-sm${S._sessPeriod===4?' btn-blue':''}" style="font-size:10px;padding:4px 10px" onclick="sessSetPeriod('${name}',4)">4h</button>
+      <button class="btn btn-sm${S._sessPeriod===12?' btn-blue':''}" style="font-size:10px;padding:4px 10px" onclick="sessSetPeriod('${name}',12)">12h</button>
+      <button class="btn btn-sm${S._sessPeriod===24?' btn-blue':''}" style="font-size:10px;padding:4px 10px" onclick="sessSetPeriod('${name}',24)">24h</button>
+      <button class="btn btn-sm${!S._sessPeriod?' btn-blue':''}" style="font-size:10px;padding:4px 10px" onclick="sessSetPeriod('${name}',0)">All</button>
+      <span class="d" style="font-size:10px;margin-left:8px">${S._sessPeriod?'last '+S._sessPeriod+'h':'all-time'} stats</span>
+    </div>
+    <div id="sess-period-stats" class="stats-grid">
       <div class="stat-box"><div class="stat-label">PnL (Taker)</div><div class="stat-value ${pc(csvPnl)}">${fp(csvPnl)}</div><div class="stat-sub">${fps(avgPnl)} / trade</div></div>
       <div class="stat-box"><div class="stat-label">Win Rate</div><div class="stat-value ${wc(csvWr)}">${csvWr}%</div><div class="stat-sub">${csvWins}W / ${csvTrades-csvWins}L</div></div>
       <div class="stat-box"><div class="stat-label">Trades</div><div class="stat-value b">${csvTrades}</div></div>
       <div class="stat-box"><div class="stat-label">Windows</div><div class="stat-value cy">${d.windows_settled||0}</div></div>
     </div>
+    ${viabilityHtml}
+    ${(()=>{
+      // PnL trend chart for the selected period (60-min buckets, or 15-min if <12h)
+      const bucketMin = (S._sessPeriod && S._sessPeriod <= 4) ? 15 : 60;
+      return `<div class="card" style="padding:14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px">PnL Over Time (${bucketMin}min buckets)</div>
+          <div class="d mono" style="font-size:10px">cumulative + per-bucket</div>
+        </div>
+        <div style="height:240px"><canvas id="sess-pnl-trend"></canvas></div>
+      </div>`;
+    })()}
     ${pills?'<div class="section-header"><div class="section-title">Recent Windows</div></div><div style="margin-bottom:16px">'+pills+'</div>':''}
     ${comboRows?`<div class="card"><div class="card-header"><h3>Combo Performance</h3><span class="d mono" style="font-size:10px">${csvTrades} trades from CSV</span></div><div style="overflow-x:auto"><table><thead><tr><th>Combo</th><th>Trades</th><th>Wins</th><th>Win%</th><th>PnL</th><th>$/Trade</th><th style="width:80px">WR</th></tr></thead><tbody>${comboRows}</tbody></table></div></div>`:''}
     ${(()=>{
@@ -2152,7 +2790,9 @@ async function renderAnalysis(el) {
         </div>`;
     });
 
-    // Leaderboard
+    // Leaderboard with viability
+    const sessLookup={};
+    (S.sessions||[]).forEach(ss=>{sessLookup[ss.name]=ss});
     let lbRows='';
     sortedNames.forEach((name,i)=>{
         const s=sessions[name];
@@ -2162,18 +2802,24 @@ async function renderAnalysis(el) {
         const aw=r.avg_win||0;
         const al=r.avg_loss||0;
         const maxdd=r.max_dd||0;
+        // Viability lookup from S.sessions
+        const v=(sessLookup[name]?.viability)||{};
+        const verdict=v.viability||'insufficient_data';
+        const vColor=verdict==='viable'?'#10b981':verdict==='promising'?'#3b82f6':verdict==='borderline'?'#f59e0b':verdict==='not_viable'?'#ef4444':'#6b7280';
+        const vLabel=verdict==='viable'?'VIABLE':verdict==='promising'?'PROM':verdict==='borderline'?'BORDR':verdict==='not_viable'?'WEAK':'NEW';
+        const r2=v.r_squared!=null?v.r_squared.toFixed(2):'—';
         lbRows+=`<tr style="cursor:pointer" onclick="navigate('session','${name}')">
             <td style="font-weight:700;color:${i<3?'var(--yellow)':'var(--dim)'}">#${i+1}</td>
             <td style="font-weight:700;color:var(--text)">${name}</td>
             <td><span class="tag" style="background:rgba(6,182,212,.1);color:var(--cyan);border:1px solid rgba(6,182,212,.2);font-size:9px">${s.architecture||'?'}</span></td>
+            <td><span class="v-badge ${verdict}" style="font-size:9px;padding:2px 5px;border-radius:3px;background:${vColor}22;color:${vColor};border:1px solid ${vColor}">${vLabel}</span></td>
             <td>${s.trades}</td>
             <td class="${wc(s.wr)}">${s.wr}%</td>
             <td class="${pc(s.pnl)}" style="font-weight:700">${fp(s.pnl)}</td>
             <td class="${pc(s.avg_pnl)}">${fps(s.avg_pnl)}</td>
             <td style="font-weight:700;color:${exp>0?'var(--green)':exp<0?'var(--red)':'var(--dim)'}">${fps(exp)}</td>
             <td style="color:${rr>=0.8?'var(--green)':rr>=0.5?'var(--yellow)':'var(--red)'}">${rr.toFixed(2)}</td>
-            <td class="g" style="font-size:10px">$${aw.toFixed(0)}</td>
-            <td class="r" style="font-size:10px">$${al.toFixed(0)}</td>
+            <td>${r2}</td>
             <td style="color:${maxdd===0?'var(--green)':'var(--red)'}">$${maxdd}</td></tr>`;
     });
 
@@ -2301,7 +2947,7 @@ async function renderAnalysis(el) {
 
     <div class="analysis-section">
         <div class="analysis-section-title"><span style="color:var(--yellow)">&#9733;</span> Session Leaderboard</div>
-        <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Session</th><th>Arch</th><th>Trades</th><th>Win%</th><th>PnL</th><th>$/Trade</th><th>E[X]</th><th>R:R</th><th>AvgW</th><th>AvgL</th><th>MaxDD</th></tr></thead><tbody>${lbRows}</tbody></table></div></div>
+        <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Session</th><th>Arch</th><th>Tier</th><th>Trades</th><th>Win%</th><th>PnL</th><th>$/Trade</th><th>E[X]</th><th>R:R</th><th>R²</th><th>MaxDD</th></tr></thead><tbody>${lbRows}</tbody></table></div></div>
     </div>
 
     <!-- Interactive Charts -->
@@ -2601,6 +3247,31 @@ function _refreshMemory(){
 }
 setInterval(_refreshMemory, 30000);
 
+// BTC 1h regime (delta% + realized vol%) — refresh every 15s
+function _refreshBtcRegime(){
+    api('/api/btc-regime').then(d=>{
+        if(!d || (d.error && d.delta_pct === undefined)) return;
+        const el = document.getElementById('g-btc-1h');
+        const rv = document.getElementById('g-btc-rvol');
+        if(el && d.delta_pct !== undefined) {
+            const sign = d.delta_pct >= 0 ? '+' : '';
+            el.textContent = sign + d.delta_pct.toFixed(2) + '%';
+            el.style.color = d.stale ? 'var(--d)'
+                : d.delta_pct >= 0.05 ? 'var(--green)'
+                : d.delta_pct <= -0.05 ? 'var(--red)'
+                : 'var(--fg)';
+        }
+        if(rv && d.realized_vol_pct !== null && d.realized_vol_pct !== undefined) {
+            // Sessions gate at 25-80% — color-code so you can see regime at a glance
+            const v = d.realized_vol_pct;
+            rv.textContent = 'vol '+v.toFixed(0)+'%';
+            rv.style.color = (v < 25 || v > 80) ? 'var(--yellow)' : 'var(--d)';
+        }
+    }).catch(()=>{});
+}
+_refreshBtcRegime();  // fire immediately
+setInterval(_refreshBtcRegime, 15000);
+
 function connectSSE(){
     if(evtSource) evtSource.close();
     evtSource = new EventSource('/api/stream');
@@ -2695,8 +3366,15 @@ function _updateSessionLive(d){
 }
 
 function _updateOverviewFromSSE(){
+    // SKIP if a time-window period is active — the period refresher owns
+    // updates in that mode. SSE updates would clobber the period data with
+    // SSE-cached aggregate stats, causing flicker and incorrect display.
+    if (S._ovPeriod && S._ovPeriod !== 'all') return;
     // Build session list purely from SSE VPS cache
-    const sessions = Object.entries(_sseVpsCache).map(([name, d]) => ({
+    // Filter out stopped sessions by default — only show active ones
+    if(S._showStopped === undefined) S._showStopped = false;
+
+    const allSessions = Object.entries(_sseVpsCache).map(([name, d]) => ({
         name, where: d._name ? 'vps' : 'local',
         status: d.updated && (Date.now()/1000 - d.updated) < 120 ? 'active' : 'stopped',
         architecture: d.architecture || 'impulse_lag',
@@ -2708,15 +3386,22 @@ function _updateOverviewFromSSE(){
         started: d.started || 0,
         viability: d.viability || null,
     }));
+
+    // Track total for the indicator
+    S._totalSessionCount = allSessions.length;
+    S._activeSessionCount = allSessions.filter(s => s.status === 'active').length;
+
+    const sessions = S._showStopped ? allSessions : allSessions.filter(s => s.status === 'active');
     S.sessions = sessions;
 
-    // Re-render overview (updates stats, filters, session cards — preserves chart zone)
+    // Re-render whichever page is currently visible
     const el = document.getElementById('content');
-    if(!el || S.lastRenderedPage !== 'overview') {
+    if(!el) return;
+    if(S.page === 'overview') {
         renderOverview(el);
-        return;
+    } else if(S.page === 'compare') {
+        renderCompare(el);
     }
-    renderOverview(el);
     return;
 
     // Dead code below — kept for reference but bypassed by the return above
@@ -2763,7 +3448,7 @@ function _updateOverviewFromSSE(){
 }
 
 // ═══ Init ═══
-connectSSE();      // real-time stream from VPS (primary data source)
+connectSSE();      // real-time stream from VPS (primary data source — All view)
 // Delayed initial REST load — only if SSE hasn't provided data yet
 setTimeout(() => { if(S.sessions.length === 0) loadSessions(); }, 3000);
 setInterval(tickTimer, 1000);  // local timer tick
@@ -2808,6 +3493,41 @@ def index():
 @app.route("/api/sessions")
 def api_sessions():
     return jsonify(get_all_sessions())
+
+
+_PERIOD_SECONDS = {
+    "1h": 3600, "4h": 4 * 3600, "8h": 8 * 3600,
+    "12h": 12 * 3600, "1d": 24 * 3600,
+}
+
+
+@app.route("/api/overview")
+def api_overview():
+    """Time-filtered overview endpoint. Returns the same shape as /api/sessions
+    but with CSV stats computed only over the last `period` of trades.
+
+    Stopped/inactive sessions are excluded — period views are for live behavior,
+    not historical reference.
+
+    Query params:
+        period: one of 1h, 4h, 8h, 12h, 1d, or 'all' (default)
+    """
+    period = (request.args.get("period") or "all").lower()
+    since_ts = None
+    if period in _PERIOD_SECONDS:
+        since_ts = time.time() - _PERIOD_SECONDS[period]
+    else:
+        period = "all"
+    sessions = get_all_sessions(since_ts=since_ts)
+    # Filter out stopped/inactive sessions — period views should only show
+    # what's currently running. Stopped sessions are always shown via the
+    # live SSE view's "Show N stopped" toggle.
+    sessions = [s for s in sessions if s.get("status") in ("running", "active")]
+    return jsonify({
+        "period": period,
+        "since_ts": since_ts,
+        "sessions": sessions,
+    })
 
 
 @app.route("/api/configs")
@@ -2863,6 +3583,73 @@ def api_stream():
 def api_ws_status():
     """Check if VPS WebSocket relay is connected."""
     return jsonify({"connected": _vps_connected[0], "cached_sessions": len(_vps_cache)})
+
+
+# ═══ BTC 1h price delta + realized vol (Binance public REST, 15s cache) ═══
+_btc_regime_cache = {"ts": 0.0, "data": None}
+_btc_regime_lock = threading.Lock()
+
+
+@app.route("/api/btc-regime")
+def api_btc_regime():
+    """Return 1h BTC regime stats: price delta % + annualized realized vol %.
+
+    The realized vol is computed the same way the bot's sessions compute it
+    (per-minute log returns → stdev → annualized). Sessions like titan/alpha/
+    consensus use this to gate trading (skip < 25% or > 80% vol)."""
+    now = time.time()
+    with _btc_regime_lock:
+        if _btc_regime_cache["data"] and (now - _btc_regime_cache["ts"]) < 15:
+            return jsonify(_btc_regime_cache["data"])
+    try:
+        import urllib.request
+        import math as _math
+        # 60 1-minute klines = last ~60 minutes of BTC
+        url = "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=60"
+        req = urllib.request.Request(url, headers={"User-Agent": "pm-dashboard/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+        if not data or len(data) < 2:
+            raise ValueError("not enough klines")
+        closes = [float(k[4]) for k in data]
+        opens_ = [float(k[1]) for k in data]
+        volumes = [float(k[7]) for k in data]  # quote volume USDT
+        price_1h_ago = opens_[0]
+        price_now = closes[-1]
+        delta_pct = (price_now - price_1h_ago) / price_1h_ago * 100
+        # Realized vol from log returns
+        log_rets = []
+        for i in range(1, len(closes)):
+            if closes[i-1] > 0 and closes[i] > 0:
+                log_rets.append(_math.log(closes[i] / closes[i-1]))
+        if len(log_rets) >= 5:
+            mean_r = sum(log_rets) / len(log_rets)
+            var_r = sum((r - mean_r) ** 2 for r in log_rets) / (len(log_rets) - 1)
+            per_min_stdev = _math.sqrt(var_r)
+            # Annualize: sqrt(525600 minutes per year)
+            annual_vol_pct = per_min_stdev * _math.sqrt(525600) * 100
+        else:
+            annual_vol_pct = None
+        # Recent volume (last minute) — preserve the volume data in case we want it
+        last_quote_vol = volumes[-1] if volumes else 0
+        result = {
+            "price_1h_ago": price_1h_ago,
+            "price_now": price_now,
+            "delta_pct": round(delta_pct, 3),
+            "delta_bps": round(delta_pct * 100, 1),
+            "realized_vol_pct": round(annual_vol_pct, 1) if annual_vol_pct is not None else None,
+            "last_1m_quote_vol_usd": last_quote_vol,
+            "n_minutes": len(closes),
+        }
+        with _btc_regime_lock:
+            _btc_regime_cache["data"] = result
+            _btc_regime_cache["ts"] = now
+        return jsonify(result)
+    except Exception as e:
+        with _btc_regime_lock:
+            if _btc_regime_cache["data"]:
+                return jsonify({**_btc_regime_cache["data"], "stale": True, "error": str(e)})
+        return jsonify({"error": str(e)}), 503
 
 
 @app.route("/api/system-mem")
@@ -2936,6 +3723,125 @@ COMPARISON_PAIRS = [
     {"name": "Multi-exchange consensus", "lax": "oracle_consensus", "strict": "oracle_consensus_strict"},
     {"name": "Time × direction filter", "lax": "oracle_chrono", "strict": "oracle_chrono_aggressive"},
 ]
+
+
+@app.route("/api/correlations")
+def api_correlations():
+    """Compute Pearson correlation of hourly PnL between session pairs.
+    Optional ?hours=N to limit the lookback (default: all data)."""
+    import math
+    from collections import defaultdict
+    hours = request.args.get("hours", type=int)
+    cutoff_ts = (time.time() - hours * 3600) if hours else 0
+
+    # Build hourly PnL series per session
+    sessions_hourly = {}
+    if not DATA_DIR.exists():
+        return jsonify({"sessions": [], "matrix": []})
+    for d in sorted(DATA_DIR.iterdir()):
+        if not d.is_dir() or d.name.startswith("_"):
+            continue
+        csv_path = d / "trades.csv"
+        if not csv_path.exists():
+            continue
+        try:
+            hourly = defaultdict(float)
+            with open(csv_path) as f:
+                for row in csv.DictReader(f):
+                    try:
+                        ts = float(row.get("timestamp", 0) or 0)
+                        if ts < cutoff_ts:
+                            continue
+                        pnl = float(row.get("pnl_taker", 0) or 0)
+                        hour_bucket = int(ts // 3600)
+                        hourly[hour_bucket] += pnl
+                    except (ValueError, TypeError):
+                        continue
+            if hourly:
+                sessions_hourly[d.name] = dict(hourly)
+        except Exception:
+            continue
+
+    session_names = sorted(sessions_hourly.keys())
+
+    def correlation(x, y):
+        n = len(x)
+        if n < 5:
+            return None
+        mean_x = sum(x) / n
+        mean_y = sum(y) / n
+        num = sum((x[i] - mean_x) * (y[i] - mean_y) for i in range(n))
+        den_x = math.sqrt(sum((x[i] - mean_x) ** 2 for i in range(n)))
+        den_y = math.sqrt(sum((y[i] - mean_y) ** 2 for i in range(n)))
+        if den_x == 0 or den_y == 0:
+            return None
+        return round(num / (den_x * den_y), 3)
+
+    # Build N×N correlation matrix
+    matrix = []
+    for s1 in session_names:
+        row = []
+        for s2 in session_names:
+            if s1 == s2:
+                row.append(1.0)
+                continue
+            common = sorted(set(sessions_hourly[s1].keys()) & set(sessions_hourly[s2].keys()))
+            if len(common) < 5:
+                row.append(None)
+                continue
+            x = [sessions_hourly[s1][h] for h in common]
+            y = [sessions_hourly[s2][h] for h in common]
+            row.append(correlation(x, y))
+        matrix.append(row)
+
+    return jsonify({
+        "sessions": session_names,
+        "matrix": matrix,
+        "hours": hours,
+    })
+
+
+@app.route("/api/session-pnl-series/<name>")
+def api_session_pnl_series(name):
+    """Time-bucketed PnL series for a single session.
+    Optional ?bucket_minutes=N (default 60). Used by session detail charts."""
+    bucket_minutes = request.args.get("bucket_minutes", default=60, type=int)
+    bucket_seconds = bucket_minutes * 60
+    csv_path = DATA_DIR / name / "trades.csv"
+    if not csv_path.exists():
+        return jsonify({"buckets": []})
+    from collections import defaultdict
+    buckets = defaultdict(lambda: {"pnl": 0.0, "trades": 0, "wins": 0})
+    try:
+        with open(csv_path) as f:
+            for row in csv.DictReader(f):
+                try:
+                    ts = float(row.get("timestamp", 0) or 0)
+                    pnl = float(row.get("pnl_taker", 0) or 0)
+                    result = (row.get("result") or "").strip()
+                    bucket_ts = int(ts // bucket_seconds) * bucket_seconds
+                    buckets[bucket_ts]["pnl"] += pnl
+                    buckets[bucket_ts]["trades"] += 1
+                    if result == "WIN":
+                        buckets[bucket_ts]["wins"] += 1
+                except (ValueError, TypeError):
+                    continue
+    except Exception:
+        return jsonify({"buckets": []})
+
+    sorted_buckets = sorted(buckets.items())
+    result = []
+    cum = 0.0
+    for ts, data in sorted_buckets:
+        cum += data["pnl"]
+        result.append({
+            "ts": ts,
+            "pnl": round(data["pnl"], 2),
+            "cum_pnl": round(cum, 2),
+            "trades": data["trades"],
+            "wr": round(data["wins"] / data["trades"] * 100, 1) if data["trades"] else 0,
+        })
+    return jsonify({"buckets": result})
 
 
 @app.route("/api/comparisons")

@@ -50,6 +50,15 @@ MISPRICING_MIN_PP = 0.05    # 5pp minimum gap between table and market
 MISPRICING_STRONG_PP = 0.10 # 10pp = strong mispricing → 1.5x size
 MISPRICING_MAX_PP = 0.30    # 30pp+ = probably stale data, skip
 
+# ═══ Halt parameters (added 2026-04-11) ═══
+# Conservative config matching the already-battle-tested omega/titan halts.
+# Rationale: oracle_arb's worst-6h of -$5,449 during strike-pinning chop
+# represents a real failure mode, not noise. A circuit breaker catches it.
+OA_HALT_LOOKBACK = 8              # last N trades
+OA_HALT_LOSS_THRESHOLD = -200     # halt if sum < this
+OA_HALT_DURATION_MIN = 90         # cooldown duration
+OA_DAILY_LOSS_BUDGET = -1500      # daily hard ceiling
+
 COMBO_PARAMS = [
     {"name": "OA_arb", "btc_threshold_bp": 0, "lookback_s": 0},
 ]
@@ -57,6 +66,12 @@ COMBO_PARAMS = [
 _last_signal_time = [0.0]
 _last_status = [0.0]
 _edge_table_local = None
+
+# ═══ Halt state ═══
+_recent_pnl = deque(maxlen=OA_HALT_LOOKBACK)
+_halt_until = [0.0]
+_daily_pnl_log = deque(maxlen=1000)  # (ts, pnl) tuples
+_last_seen_total = [0]
 
 
 def _load_table():
@@ -110,8 +125,9 @@ def _get_table_wr(state, direction, time_remaining):
         target_ts = time.time() - 30
         price_30ago = None
         for ts, px in state.price_buffer:
-            if ts >= target_ts:
-                price_30ago = px
+            if ts <= target_ts:
+                price_30ago = px  # keep the LATEST tick still ≥ 30s old
+            else:
                 break
         if price_30ago and price_30ago > 0:
             mom_bps = (btc - price_30ago) / price_30ago * 10000
@@ -152,8 +168,36 @@ def on_tick(state, price, ts):
     _load_table()
 
 
+def _ingest_settled_pnl(state):
+    """Pick up newly settled trades into the rolling halt window + daily log.
+    Mirrors oracle_omega.py pattern — combo.trades is a list of dicts,
+    combo.total_trades is a monotonic counter that survives the 50-trade cap."""
+    if not state.combos:
+        return
+    combo = state.combos[0]
+    cur = combo.total_trades
+    if cur <= _last_seen_total[0]:
+        return
+    new_count = cur - _last_seen_total[0]
+    new_trades = combo.trades[-new_count:] if new_count <= len(combo.trades) else combo.trades
+    for t in new_trades:
+        pnl = float(t.get("pnl_taker", 0.0))
+        ts = float(t.get("timestamp", time.time()))
+        _recent_pnl.append(pnl)
+        _daily_pnl_log.append((ts, pnl))
+    _last_seen_total[0] = cur
+
+
+def _today_pnl():
+    today_start = int(time.time() // 86400) * 86400
+    return sum(p for ts, p in _daily_pnl_log if ts >= today_start)
+
+
 def check_signals(state, now_s):
     import bot.paper_trade_v2 as engine
+
+    # Always ingest any new settled trades into the rolling halt window
+    _ingest_settled_pnl(state)
 
     if not state.window_active:
         return
@@ -183,6 +227,32 @@ def check_signals(state, now_s):
 
     book_age_ms = (now - state.book.updated_at) * 1000
     if book_age_ms > getattr(engine, 'MAX_BOOK_AGE_MS', 500):
+        return
+
+    # ═══ Halt cooldown check ═══
+    if now < _halt_until[0]:
+        return
+
+    # ═══ Daily loss budget — hard ceiling, resets at UTC midnight ═══
+    daily_budget = getattr(engine, 'OA_DAILY_LOSS_BUDGET', OA_DAILY_LOSS_BUDGET)
+    today = _today_pnl()
+    if today < daily_budget:
+        next_midnight = (int(now // 86400) + 1) * 86400
+        _halt_until[0] = next_midnight
+        print("  {}[OA] DAILY BUDGET HIT  today=${:+.0f} < ${} → halt until UTC midnight{}".format(
+            engine.R, today, daily_budget, engine.RST))
+        return
+
+    # ═══ Rolling cum-loss halt trigger ═══
+    halt_lookback = getattr(engine, 'OA_HALT_LOOKBACK', OA_HALT_LOOKBACK)
+    halt_thresh = getattr(engine, 'OA_HALT_LOSS_THRESHOLD', OA_HALT_LOSS_THRESHOLD)
+    halt_dur_min = getattr(engine, 'OA_HALT_DURATION_MIN', OA_HALT_DURATION_MIN)
+    if len(_recent_pnl) >= halt_lookback and sum(_recent_pnl) < halt_thresh:
+        _halt_until[0] = now + halt_dur_min * 60
+        cum = sum(_recent_pnl)
+        print("  {}[OA] HALT TRIGGERED  cum({})=${:+.0f} < ${} → cooldown {}min{}".format(
+            engine.R, halt_lookback, cum, halt_thresh, halt_dur_min, engine.RST))
+        _recent_pnl.clear()
         return
 
     btc_corrected = state.binance_price - state.offset
@@ -292,6 +362,10 @@ ARCH_SPEC = {
         "DEAD_ZONE_START": 0, "DEAD_ZONE_END": 0,
         "MIN_SHARES": 1,
         "ONE_TRADE_PER_WINDOW": False,
+        "OA_HALT_LOOKBACK": OA_HALT_LOOKBACK,
+        "OA_HALT_LOSS_THRESHOLD": OA_HALT_LOSS_THRESHOLD,
+        "OA_HALT_DURATION_MIN": OA_HALT_DURATION_MIN,
+        "OA_DAILY_LOSS_BUDGET": OA_DAILY_LOSS_BUDGET,
     },
     "on_window_start": on_window_start,
     "on_window_end": None,

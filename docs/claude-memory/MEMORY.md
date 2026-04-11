@@ -1,0 +1,11 @@
+- [Current State & Next Steps](current_state_and_next.md) — **READ FIRST** — where we are right now (Apr 11 2026 04:00 UTC), 14 active sessions, what's pending
+- [Project State](project_state.md) — high-level current portfolio state, active sessions, edge table, current regime
+- [Bugs Fixed](bugs_fixed.md) — 5 critical bugs fixed Apr 10-11: NO sizing (systemic), omega/pivot halt (dead), momentum lookup, consensus V2, overnight UTC/ET
+- [Architectures Inventory](architectures_inventory.md) — every architecture file, thesis, key params, active/inactive status, audit verdicts
+- [Analysis Scripts](analysis_scripts.md) — every analysis/ script, what it does, when to use it, quick reference
+- [Key Findings](key_findings.md) — correlation (eff N=1.6), halt-sweep results, time-of-day, chrono's real mechanism, 10 insights
+- [Hypotheses Tested](hypotheses_tested.md) — validated/disproven/untested hypotheses, meta-principles (don't re-test the same ideas)
+- [Viability Framework](viability_framework.md) — how to read metrics, 4/4 deploy criteria, trust tiers by sample size, archetypes
+- [Operational Playbook](operational_playbook.md) — sync/deploy/nuke/restart commands, dashboard URL, smoke-test pattern, safety rules
+- [User Preferences](user_preferences.md) — working style: concise, no preamble, decisive with caveats, menu+recommendation for choices
+- [Session Summary Apr 8-9](../output/session_summary_apr8_9.md) — older session writeup from pre-NO-fix era (for historical context)

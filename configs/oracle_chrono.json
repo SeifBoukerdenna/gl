@@ -1,5 +1,5 @@
 {
-    "_description": "Oracle CHRONO — direction-aware time bucket filter. Blocks T-60-90 NO, T-5-30 NO, T-270-300 NO (persistent killers). Boosts T-210-240 NO, T-150-180 YES, T-180-210 YES (persistent winners) at 1.3x.",
+    "_description": "Oracle CHRONO V1 (REVERTED) — direction × time bucket filter. Blocks T-60-90 NO, T-5-30 NO, T-270-300 NO. Backtest proved V1 strictly better than V2 softening on every viability metric.",
     "ARCHITECTURE": "oracle_chrono",
     "ONE_TRADE_PER_WINDOW": false,
     "BASE_TRADE_DOLLARS": 200,
@@ -12,6 +12,10 @@
     "OR_MAX_ENTRY": 0.88,
     "OR_MIN_ENTRY": 0.10,
     "OR_COOLDOWN_SEC": 10,
+    "CHRONO_BLOCKED": ["60-90|NO", "5-30|NO", "270-300|NO"],
+    "CHRONO_BOOSTED": ["210-240|NO", "150-180|YES", "180-210|YES"],
+    "CHRONO_MIN_VOL_PCT": 0.0,
+    "CHRONO_MAX_VOL_PCT": 100.0,
     "EDGE_TABLE_FILTER": false,
     "CHOP_FILTER": false,
     "LOSS_COOLDOWN": false,

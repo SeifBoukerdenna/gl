@@ -1,5 +1,5 @@
 {
-    "_description": "Oracle ARB — fires only when edge table WR exceeds market implied WR by >=5pp. Tests if mispricing-based filter beats absolute edge threshold.",
+    "_description": "Oracle ARB — fires only when edge table WR exceeds market implied WR by >=5pp. Tests if mispricing-based filter beats absolute edge threshold. HALTED (2026-04-11): rolling 8-trade -$200 circuit breaker + $1500 daily budget. Arb had an observed worst-6h of -$5,449 from strike-pinning chop; halt catches that mechanism.",
     "ARCHITECTURE": "oracle_arb",
     "ONE_TRADE_PER_WINDOW": false,
     "BASE_TRADE_DOLLARS": 200,
@@ -13,6 +13,10 @@
     "MISPRICING_MIN_PP": 0.05,
     "MISPRICING_STRONG_PP": 0.10,
     "MISPRICING_MAX_PP": 0.30,
+    "OA_HALT_LOOKBACK": 8,
+    "OA_HALT_LOSS_THRESHOLD": -200,
+    "OA_HALT_DURATION_MIN": 90,
+    "OA_DAILY_LOSS_BUDGET": -1500,
     "EDGE_TABLE_FILTER": false,
     "CHOP_FILTER": false,
     "LOSS_COOLDOWN": false,

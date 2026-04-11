@@ -110,8 +110,9 @@ def _compute_edge(state, direction, entry_price, time_remaining):
         target_ts = time.time() - 30
         price_30ago = None
         for ts, px in state.price_buffer:
-            if ts >= target_ts:
+            if ts <= target_ts:
                 price_30ago = px
+            else:
                 break
         if price_30ago and price_30ago > 0:
             mom_bps = (btc - price_30ago) / price_30ago * 10000

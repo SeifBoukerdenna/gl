@@ -43,10 +43,15 @@ OR_MIN_BOOK_LEVELS = 2
 OR_COOLDOWN_SEC = 10
 OR_BASE_DOLLARS = 200
 
-# Pulse confirmation parameters (NEW)
+# Pulse confirmation parameters
 PULSE_LOOKBACK_SEC = 15      # check BTC move over last N seconds
-PULSE_MIN_BPS = 3.0          # require >= Nbp move in bet direction
+PULSE_MIN_BPS = 3.0          # FALLBACK only — used when sigma unavailable
 PULSE_MAX_BPS = 25.0         # but not so much it's a blowoff (likely to revert)
+PULSE_SIGMA_MULT = 2.0       # dynamic threshold = sigma_bps * this
+PULSE_USE_DYNAMIC = True     # if True, use sigma-based threshold
+# Vol regime gate
+PULSE_MIN_VOL_PCT = 25.0     # skip if 1h annualized vol < this
+PULSE_MAX_VOL_PCT = 80.0     # skip if 1h annualized vol > this (panic regime)
 
 COMBO_PARAMS = [
     {"name": "OP_early", "btc_threshold_bp": 0, "lookback_s": 0},
@@ -108,8 +113,9 @@ def _compute_edge(state, direction, entry_price, time_remaining):
         target_ts = time.time() - 30
         price_30ago = None
         for ts, px in state.price_buffer:
-            if ts >= target_ts:
+            if ts <= target_ts:
                 price_30ago = px
+            else:
                 break
         if price_30ago and price_30ago > 0:
             mom_bps = (btc - price_30ago) / price_30ago * 10000
@@ -160,8 +166,9 @@ def _compute_pulse(state, lookback_sec):
     target_ts = time.time() - lookback_sec
     price_then = None
     for ts, px in state.price_buffer:
-        if ts >= target_ts:
-            price_then = px
+        if ts <= target_ts:
+            price_then = px  # keep LATEST tick still ≥ lookback_sec old
+        else:
             break
     if price_then is None or price_then <= 0:
         return None
@@ -244,10 +251,31 @@ def check_signals(state, now_s):
     if edge is None or edge < min_edge:
         return
 
-    # ═══ NEW GATE: Pulse confirmation ═══
+    # ═══ NEW GATE: Vol regime check ═══
+    from bot.shared.volatility import vol_tracker as _vt
+    use_dynamic = getattr(engine, 'PULSE_USE_DYNAMIC', PULSE_USE_DYNAMIC)
+    min_vol = getattr(engine, 'PULSE_MIN_VOL_PCT', PULSE_MIN_VOL_PCT)
+    max_vol = getattr(engine, 'PULSE_MAX_VOL_PCT', PULSE_MAX_VOL_PCT)
+    realized_vol = _vt.get_realized_vol_pct()
+    if realized_vol is not None:
+        if realized_vol < min_vol or realized_vol > max_vol:
+            return  # silently skip — wrong regime
+
+    # ═══ NEW GATE: Pulse confirmation (dynamic or static) ═══
     pulse_lookback = getattr(engine, 'PULSE_LOOKBACK_SEC', PULSE_LOOKBACK_SEC)
-    pulse_min = getattr(engine, 'PULSE_MIN_BPS', PULSE_MIN_BPS)
+    pulse_min_static = getattr(engine, 'PULSE_MIN_BPS', PULSE_MIN_BPS)
     pulse_max = getattr(engine, 'PULSE_MAX_BPS', PULSE_MAX_BPS)
+    pulse_sigma_mult = getattr(engine, 'PULSE_SIGMA_MULT', PULSE_SIGMA_MULT)
+
+    # Dynamic threshold = sigma_bps * multiplier, with static as floor
+    if use_dynamic:
+        sigma_bps = _vt.get_sigma_bps_over(pulse_lookback)
+        if sigma_bps is not None:
+            pulse_min = max(pulse_min_static, sigma_bps * pulse_sigma_mult)
+        else:
+            pulse_min = pulse_min_static
+    else:
+        pulse_min = pulse_min_static
 
     pulse_bps = _compute_pulse(state, pulse_lookback)
     if pulse_bps is None:
@@ -319,6 +347,10 @@ ARCH_SPEC = {
         "PULSE_LOOKBACK_SEC": PULSE_LOOKBACK_SEC,
         "PULSE_MIN_BPS": PULSE_MIN_BPS,
         "PULSE_MAX_BPS": PULSE_MAX_BPS,
+        "PULSE_SIGMA_MULT": PULSE_SIGMA_MULT,
+        "PULSE_USE_DYNAMIC": PULSE_USE_DYNAMIC,
+        "PULSE_MIN_VOL_PCT": PULSE_MIN_VOL_PCT,
+        "PULSE_MAX_VOL_PCT": PULSE_MAX_VOL_PCT,
         "MIN_ENTRY_PRICE": 0.01, "MAX_ENTRY_PRICE": 0.99,
         "DEAD_ZONE_START": 0, "DEAD_ZONE_END": 0,
         "MIN_SHARES": 1,

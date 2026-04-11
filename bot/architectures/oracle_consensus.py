@@ -1,38 +1,31 @@
 """
-Architecture: oracle_consensus (Edge Table + Multi-Exchange Confirmation)
+Architecture: oracle_consensus (Edge Table + Multi-Exchange LEVEL Confirmation)
 
 HYPOTHESIS
 ==========
-The architecture that survived April 9's bloodbath best was test_ic_wide
-(impulse_confirmed). Its key feature: it requires Coinbase AND Bybit momentum
-in the same direction before firing. Single-exchange Binance moves can be
-artifacts (one large order, an internal liquidation, a spike from a single
-trader). Multi-exchange consensus moves are real institutional flow.
+Single-exchange Binance prices can be artifacts (one large order, an internal
+liquidation, a feed glitch). If we require independent venues to AGREE ON THE
+LEVEL — Coinbase and Bybit also show BTC on the same side of the strike — we
+filter out single-venue noise without filtering out real edge-table value.
 
-What if we gave oracle the same protection? Edge table picks the setup, then
-multi-exchange confirmation acts as a "is this move actually happening across
-the market?" gate.
-
-This is structurally different from oracle_pulse (which uses Binance impulse
-only). oracle_pulse confirms with the SAME data source the bot already trades
-on. oracle_consensus confirms with INDEPENDENT data sources — Coinbase and
-Bybit are separate venues with separate market makers, separate liquidity, and
-separate price discovery.
+NOTE: V1 of this file confirmed 5-second MOMENTUM direction, which was the
+wrong filter (it forced the bot into momentum-continuation regimes and
+anti-selected good NO trades). V2 confirms LEVEL — does Coinbase / Bybit also
+show BTC > strike (for YES bets) or BTC < strike (for NO bets)?
 
 LOGIC
 =====
 Fire only when ALL of:
-  1. Edge table edge >= OR_PHASE1_MIN_EDGE (8pp default, same as base oracle)
-  2. At least IC_MIN_CONFIRM_EXCHANGES other exchanges show >= IC_CONFIRM_MIN_BPS
-     momentum in the same direction over the last IC_CONFIRM_WINDOW_SEC seconds
+  1. Edge table edge >= OR_PHASE1_MIN_EDGE
+  2. At least IC_MIN_CONFIRM_EXCHANGES other exchanges show BTC LEVEL on the
+     same side of the strike as the bet direction
   3. Standard book/spread/timing gates from oracle
 
 With 1 confirmation: normal size
 With 2 confirmations (both Coinbase AND Bybit): 1.3x size — high conviction
 
-Imports the exchange feed module from impulse_confirmed to avoid code
-duplication. Each session runs in its own process so the feeds get started
-fresh per session.
+Imports the exchange feed module from impulse_confirmed to reuse the
+websocket infrastructure (but ignores its momentum function).
 """
 
 import time
@@ -41,11 +34,12 @@ from collections import deque
 from pathlib import Path
 
 # Reuse the existing exchange feed infrastructure from impulse_confirmed.
-# When this architecture loads in its own process, the module-level state
-# in impulse_confirmed gets initialized fresh and the feeds start.
+# We import the underlying price deque and the feed starter, but NOT the
+# momentum helper — V2 uses level-based confirmation instead.
 from bot.architectures.impulse_confirmed import (
     _start_feeds as _start_exchange_feeds,
-    _get_exchange_momentum,
+    _exchange_prices,
+    _lock as _exchange_lock,
 )
 
 # ═══ Parameters ═══
@@ -59,10 +53,13 @@ OR_MIN_BOOK_LEVELS = 2
 OR_COOLDOWN_SEC = 10
 OR_BASE_DOLLARS = 200
 
-# Multi-exchange confirmation parameters (from impulse_confirmed)
-IC_MIN_CONFIRM_EXCHANGES = 1
-IC_CONFIRM_WINDOW_SEC = 5
-IC_CONFIRM_MIN_BPS = 1.0
+# Multi-exchange LEVEL confirmation parameters (V2)
+IC_MIN_CONFIRM_EXCHANGES = 1   # at least N other venues must agree on side
+IC_MAX_PRICE_AGE_SEC = 3       # reject venue prices older than this
+IC_LEVEL_TOLERANCE_BPS = 0.5   # ignore venue if it's within this of strike (no opinion)
+# Vol regime gate
+IC_MIN_VOL_PCT = 25.0          # skip if 1h annualized vol < this
+IC_MAX_VOL_PCT = 80.0          # skip if vol > this (panic regime)
 
 COMBO_PARAMS = [
     {"name": "OC_early", "btc_threshold_bp": 0, "lookback_s": 0},
@@ -124,8 +121,9 @@ def _compute_edge(state, direction, entry_price, time_remaining):
         target_ts = time.time() - 30
         price_30ago = None
         for ts, px in state.price_buffer:
-            if ts >= target_ts:
-                price_30ago = px
+            if ts <= target_ts:
+                price_30ago = px  # keep the LATEST tick still ≥ 30s old
+            else:
                 break
         if price_30ago and price_30ago > 0:
             mom_bps = (btc - price_30ago) / price_30ago * 10000
@@ -169,31 +167,63 @@ def _compute_edge(state, direction, entry_price, time_remaining):
     return edge, wr, level
 
 
-def _check_consensus(direction, window_sec, min_bps):
-    """Check how many independent exchanges confirm the direction.
-    Returns (count, sessions_list)."""
+def _latest_venue_price(name, max_age_sec):
+    """Return (price, age_sec) for the latest tick from a venue, or (None, None)
+    if no data or stale."""
+    with _exchange_lock:
+        prices = _exchange_prices.get(name)
+        if not prices:
+            return None, None
+        ts, px = prices[-1]
+    age = time.time() - ts
+    if age > max_age_sec:
+        return None, None
+    return px, age
+
+
+def _check_level_consensus(strike, direction, max_age_sec, tolerance_bps):
+    """LEVEL-BASED CONSENSUS (V2).
+
+    For each independent venue (Coinbase, Bybit), check whether its latest
+    price is on the same side of the strike as our bet direction. Venues
+    within `tolerance_bps` of the strike are treated as "no opinion" and
+    don't count as either confirmation or rejection.
+
+    Returns (confirms, rejects, tags) — a venue can confirm, reject, or
+    abstain. We also report rejections so the caller can choose to skip
+    on disagreement (not just absence of confirmation).
+    """
     confirms = 0
-    sessions = []
+    rejects = 0
+    tags = []
+    for venue, label in (("coinbase", "CB"), ("bybit", "BY")):
+        px, age = _latest_venue_price(venue, max_age_sec)
+        if px is None or strike <= 0:
+            tags.append("{}?".format(label))
+            continue
+        venue_delta_bps = (px - strike) / strike * 10000
+        if abs(venue_delta_bps) < tolerance_bps:
+            tags.append("{}~".format(label))  # too close to strike to call
+            continue
+        venue_side = "YES" if venue_delta_bps > 0 else "NO"
+        if venue_side == direction:
+            confirms += 1
+            tags.append("{}{:+.1f}✓".format(label, venue_delta_bps))
+        else:
+            rejects += 1
+            tags.append("{}{:+.1f}✗".format(label, venue_delta_bps))
+    return confirms, rejects, tags
 
-    mom_cb = _get_exchange_momentum("coinbase", window_sec)
-    if mom_cb is not None:
-        if direction == "YES" and mom_cb >= min_bps:
-            confirms += 1
-            sessions.append("CB{:+.1f}".format(mom_cb))
-        elif direction == "NO" and mom_cb <= -min_bps:
-            confirms += 1
-            sessions.append("CB{:+.1f}".format(mom_cb))
 
-    mom_by = _get_exchange_momentum("bybit", window_sec)
-    if mom_by is not None:
-        if direction == "YES" and mom_by >= min_bps:
-            confirms += 1
-            sessions.append("BY{:+.1f}".format(mom_by))
-        elif direction == "NO" and mom_by <= -min_bps:
-            confirms += 1
-            sessions.append("BY{:+.1f}".format(mom_by))
-
-    return confirms, sessions
+def _vol_regime_ok(engine):
+    """Returns True if current 1h vol is within the acceptable trading range."""
+    from bot.shared.volatility import vol_tracker as _vt
+    vol = _vt.get_realized_vol_pct()
+    if vol is None:
+        return True  # no data, allow trading
+    min_vol = getattr(engine, 'IC_MIN_VOL_PCT', IC_MIN_VOL_PCT)
+    max_vol = getattr(engine, 'IC_MAX_VOL_PCT', IC_MAX_VOL_PCT)
+    return min_vol <= vol <= max_vol
 
 
 def on_tick(state, price, ts):
@@ -259,17 +289,22 @@ def check_signals(state, now_s):
         min_edge = getattr(engine, 'OR_PHASE2_MIN_EDGE', OR_PHASE2_MIN_EDGE)
         combo_name = "OC_late"
 
-    # Check exchange consensus regardless (for status display)
-    window_sec = getattr(engine, 'IC_CONFIRM_WINDOW_SEC', IC_CONFIRM_WINDOW_SEC)
-    min_bps = getattr(engine, 'IC_CONFIRM_MIN_BPS', IC_CONFIRM_MIN_BPS)
-    confirm_count, confirm_sessions = _check_consensus(direction, window_sec, min_bps)
+    # ═══ Vol regime gate ═══
+    if not _vol_regime_ok(engine):
+        return  # silently skip in dead/panic markets
+
+    # ═══ V2: Multi-exchange LEVEL consensus ═══
+    max_age = getattr(engine, 'IC_MAX_PRICE_AGE_SEC', IC_MAX_PRICE_AGE_SEC)
+    tol = getattr(engine, 'IC_LEVEL_TOLERANCE_BPS', IC_LEVEL_TOLERANCE_BPS)
+    confirm_count, reject_count, confirm_sessions = _check_level_consensus(
+        state.window_open, direction, max_age, tol)
 
     # Status
     if now - _last_status[0] >= 12:
         dc = engine.G if delta_bps > 0 else engine.R
         edge_str = "{:+.0%}".format(edge) if edge is not None else "n/a"
-        confirm_str = "{}({})".format("+".join(confirm_sessions), confirm_count) if confirm_sessions else "0/2"
-        print("  {}{}{} {}T-{:>3.0f}s{} | BTC {}{:+.1f}bp{} | {} @{:.0f}c | edge={} | confirms={}".format(
+        confirm_str = "{}({}/{})".format(",".join(confirm_sessions), confirm_count, reject_count) if confirm_sessions else "no_data"
+        print("  {}{}{} {}T-{:>3.0f}s{} | BTC {}{:+.1f}bp{} | {} @{:.0f}c | edge={} | venues={}".format(
             engine.DIM, engine.fmt_time(), engine.RST, engine.DIM, time_remaining, engine.RST,
             dc, delta_bps, engine.RST, direction, entry * 100, edge_str, confirm_str))
         _last_status[0] = now
@@ -277,9 +312,13 @@ def check_signals(state, now_s):
     if edge is None or edge < min_edge:
         return
 
-    # ═══ NEW GATE: Multi-exchange consensus ═══
+    # ═══ V2 GATE: at least N venues must agree on LEVEL, AND no venue rejects ═══
     min_confirms = getattr(engine, 'IC_MIN_CONFIRM_EXCHANGES', IC_MIN_CONFIRM_EXCHANGES)
     if confirm_count < min_confirms:
+        return
+    if reject_count > 0:
+        # Any venue showing BTC on the OPPOSITE side is a hard veto.
+        # If venues disagree about which side BTC is on, the move is suspect.
         return
 
     combo = next((c for c in state.combos if c.name == combo_name), None)
@@ -339,8 +378,10 @@ ARCH_SPEC = {
         "OR_MAX_TIME": 295,
         "OR_MIN_TIME": 5,
         "IC_MIN_CONFIRM_EXCHANGES": IC_MIN_CONFIRM_EXCHANGES,
-        "IC_CONFIRM_WINDOW_SEC": IC_CONFIRM_WINDOW_SEC,
-        "IC_CONFIRM_MIN_BPS": IC_CONFIRM_MIN_BPS,
+        "IC_MAX_PRICE_AGE_SEC": IC_MAX_PRICE_AGE_SEC,
+        "IC_LEVEL_TOLERANCE_BPS": IC_LEVEL_TOLERANCE_BPS,
+        "IC_MIN_VOL_PCT": IC_MIN_VOL_PCT,
+        "IC_MAX_VOL_PCT": IC_MAX_VOL_PCT,
         "MIN_ENTRY_PRICE": 0.01, "MAX_ENTRY_PRICE": 0.99,
         "DEAD_ZONE_START": 0, "DEAD_ZONE_END": 0,
         "MIN_SHARES": 1,

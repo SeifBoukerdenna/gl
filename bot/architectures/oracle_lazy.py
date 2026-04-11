@@ -1,43 +1,44 @@
 """
-Architecture: oracle_lazy (Signal Persistence Test)
+Architecture: oracle_lazy (Vol-Adaptive Direction-Stable Persistence)
 
 HYPOTHESIS
 ==========
-Today's bloodbath had a specific failure pattern:
-  21:50:30 → BTC $72,266, +5bp → fires YES @ 59c → LOSS
-  21:51:18 → BTC $72,323, +13bp → fires YES @ 74c → LOSS
-  21:51:32 → BTC $72,310, +12bp → fires YES @ 62c → LOSS
-  21:52:14 → BTC $72,285, +8bp → fires YES @ 47c → LOSS
+The bloodbath showed a specific failure pattern: BTC spikes, oracle fires,
+BTC reverts within 30s, trade loses. The edge was "correct" at fire time but
+the market was actually in chop, not a real trend.
 
-In each case BTC spiked, oracle saw an edge, fired immediately, and BTC reverted
-within ~30 seconds. The trades were technically correct at fire time but wrong
-by settlement.
+The fix isn't "wait a fixed 10s" — that's arbitrary. A signal in calm markets
+can be confirmed in 3s; a signal in volatile markets needs 10+ seconds because
+noise is bigger. And "wall-clock time" doesn't actually verify persistence —
+only that time passed. A smarter approach tracks whether BTC STAYS on the
+expected side during the wait.
 
-What if oracle waited LAZY_WAIT_SEC seconds (default 10) after detecting an edge,
-THEN re-checked, and only fired if the edge was still present?
+V2 (vol-adaptive direction-stable persistence)
+===============================================
+Queue signal → wait → fire when THREE conditions all hold:
+  1. Minimum wait has elapsed (scaled to vol: 3-12s based on realized vol%)
+  2. THREE consecutive 1-second ticks show BTC on the same side of the strike
+     as our queued direction (true persistence, not chop)
+  3. Current edge is still >= 80% of the original edge (no catastrophic decay)
 
-  Real momentum:    edge persists 10s later → fire (slightly worse entry)
-  Whipsaw spike:    edge dropped or flipped 10s later → skip
-  Cost:             10s of "first mover" speed
-  Benefit:          filters out spike-and-revert patterns specifically
+If any of these fail at any point, drop the signal:
+  - Direction flips (BTC crosses strike): drop immediately
+  - Edge collapses (drops below 80% of original): drop
+  - Max wait of 25s exceeded without confirmation: drop (opportunity gone)
 
-This is the only architecture testing FORWARD-LOOKING signal persistence.
-Every other architecture filters on past momentum, peer agreement, or
-historical patterns. None ask "is this signal still here in 10 seconds?"
+Why this is smarter than a fixed wait
+======================================
+  - In calm markets (vol 20%): min wait is 3s. We can confirm fast when the
+    noise floor is low.
+  - In volatile markets (vol 80%): min wait is 8-10s. Noise is bigger, so we
+    need more time for "3 consecutive stable ticks" to mean anything.
+  - Chop regimes: BTC crosses strike repeatedly → never accumulates 3 stable
+    ticks → drop. This is the exact failure mode we want to filter.
+  - Real trends: BTC stays on one side → 3 stable ticks accumulate quickly
+    → fire with only a few seconds of delay.
 
-LOGIC
-=====
-1. On each tick, compute current setup (delta, direction, edge)
-2. If no pending signal AND current edge >= min_edge → queue it
-3. If pending signal exists AND >= LAZY_WAIT_SEC seconds elapsed:
-     a. Re-compute edge for the SAME DIRECTION at current entry
-     b. If still >= min_edge → FIRE
-     c. If not → drop pending (signal didn't persist)
-4. If window changes while pending → drop pending (invalidated)
-5. If a different direction now has edge → drop pending and queue the new one
-
-The lazy buffer means we miss the first 10s of any move, but skip every move
-that doesn't last 10s. That's the entire trade-off being tested.
+The key insight: we're measuring REAL persistence (tick stability), not
+WALL-CLOCK TIME. Time alone doesn't verify anything.
 """
 
 import time
@@ -45,9 +46,14 @@ import json as _json
 from collections import deque
 from pathlib import Path
 
-# ═══ Lazy parameters ═══
-LAZY_WAIT_SEC = 10        # wait this long before confirming the signal
-LAZY_MAX_DEGRADATION = 0.02  # signal can degrade by up to 2pp and still count as persistent
+# ═══ Vol-adaptive persistence parameters ═══
+LAZY_MIN_WAIT_FLOOR_SEC = 3   # minimum wait time in calm markets
+LAZY_MIN_WAIT_CEIL_SEC = 12   # maximum of the adaptive wait
+LAZY_VOL_SCALE = 0.1          # wait_sec = realized_vol_pct × this (clamped to floor/ceil)
+LAZY_STABLE_TICKS = 3         # consecutive same-side 1s ticks required to fire
+LAZY_MAX_WAIT_SEC = 25        # hard cap — drop signal if not confirmed by then
+LAZY_EDGE_DEGRADATION_MAX = 0.20  # final edge must be >= 80% of original
+LAZY_WAIT_SEC = 10            # LEGACY — kept for config compatibility, no longer used
 
 # ═══ Standard oracle parameters ═══
 OR_PHASE1_END = 90
@@ -72,6 +78,9 @@ _pending = {
     "original_edge": 0.0,
     "original_entry": 0.0,
     "window_start": 0,
+    "min_wait_sec": 0.0,      # vol-adaptive minimum wait (frozen at queue time)
+    "stable_count": 0,         # consecutive same-side 1s ticks
+    "last_tick_sec": 0,        # last second we updated the counter (for 1s gating)
 }
 
 _last_signal_time = [0.0]
@@ -79,7 +88,11 @@ _last_status = [0.0]
 _edge_table_local = None
 
 # Stats tracking
-_stats = {"queued": 0, "fired_persistent": 0, "dropped_degraded": 0, "dropped_flipped": 0, "dropped_window": 0}
+_stats = {
+    "queued": 0, "fired_persistent": 0,
+    "dropped_degraded": 0, "dropped_flipped": 0,
+    "dropped_window": 0, "dropped_timeout": 0,
+}
 
 
 def _load_table():
@@ -91,7 +104,12 @@ def _load_table():
         with open(table_path) as f:
             _edge_table_local = _json.load(f)
         print("  [OL] Edge table loaded: V{}".format(_edge_table_local.get("version", 1)))
-        print("  [OL] Lazy wait: {}s, max degradation: {:.0%}".format(LAZY_WAIT_SEC, LAZY_MAX_DEGRADATION))
+        print("  [OL] V2: vol-adaptive direction-stable persistence")
+        print("  [OL]   min_wait = clamp({}s, vol% × {}, {}s)".format(
+            LAZY_MIN_WAIT_FLOOR_SEC, LAZY_VOL_SCALE, LAZY_MIN_WAIT_CEIL_SEC))
+        print("  [OL]   require {} consecutive same-side 1s ticks".format(LAZY_STABLE_TICKS))
+        print("  [OL]   edge must stay >= {:.0%} of original".format(1 - LAZY_EDGE_DEGRADATION_MAX))
+        print("  [OL]   max wait {}s before timeout".format(LAZY_MAX_WAIT_SEC))
     else:
         print("  [OL] WARNING: No edge table found!")
         _edge_table_local = {}
@@ -123,7 +141,7 @@ def _compute_edge(state, direction, entry_price, time_remaining):
     btc_corrected = btc - state.offset
     strike = state.window_open
     delta_bps = (btc_corrected - strike) / strike * 10000
-    if abs(delta_bps) < 0.5:
+    if abs(delta_bps) < 0.1:
         return None, None, None
 
     d_bucket = _get_delta_bucket(delta_bps)
@@ -134,8 +152,9 @@ def _compute_edge(state, direction, entry_price, time_remaining):
         target_ts = time.time() - 30
         price_30ago = None
         for ts, px in state.price_buffer:
-            if ts >= target_ts:
-                price_30ago = px
+            if ts <= target_ts:
+                price_30ago = px  # keep the LATEST tick still ≥ 30s old
+            else:
                 break
         if price_30ago and price_30ago > 0:
             mom_bps = (btc - price_30ago) / price_30ago * 10000
@@ -247,8 +266,13 @@ def check_signals(state, now_s):
     else:
         min_edge = getattr(engine, 'OR_PHASE2_MIN_EDGE', OR_PHASE2_MIN_EDGE)
 
-    lazy_wait = getattr(engine, 'LAZY_WAIT_SEC', LAZY_WAIT_SEC)
-    lazy_max_deg = getattr(engine, 'LAZY_MAX_DEGRADATION', LAZY_MAX_DEGRADATION)
+    # ═══ V2 parameters ═══
+    min_wait_floor = getattr(engine, 'LAZY_MIN_WAIT_FLOOR_SEC', LAZY_MIN_WAIT_FLOOR_SEC)
+    min_wait_ceil  = getattr(engine, 'LAZY_MIN_WAIT_CEIL_SEC',  LAZY_MIN_WAIT_CEIL_SEC)
+    vol_scale      = getattr(engine, 'LAZY_VOL_SCALE',          LAZY_VOL_SCALE)
+    stable_req     = getattr(engine, 'LAZY_STABLE_TICKS',       LAZY_STABLE_TICKS)
+    max_wait       = getattr(engine, 'LAZY_MAX_WAIT_SEC',       LAZY_MAX_WAIT_SEC)
+    deg_max        = getattr(engine, 'LAZY_EDGE_DEGRADATION_MAX', LAZY_EDGE_DEGRADATION_MAX)
 
     # Status (every 12s)
     if now - _last_status[0] >= 12:
@@ -256,73 +280,90 @@ def check_signals(state, now_s):
         edge_str = "{:+.0%}".format(current_edge) if current_edge is not None else "n/a"
         if _pending["active"]:
             elapsed = now - _pending["queued_at"]
-            pend_str = "pending {} {:.0f}s/{:.0f}s".format(_pending["direction"], elapsed, lazy_wait)
+            pend_str = "pending {} {:.0f}s stable={}/{}".format(
+                _pending["direction"], elapsed, _pending["stable_count"], stable_req)
         else:
             pend_str = "idle"
-        print("  {}{}{} {}T-{:>3.0f}s{} | BTC {}{:+.1f}bp{} | {} @{:.0f}c | edge={} | {} (q{} ✓{} ✗{}/{}/{})".format(
+        print("  {}{}{} {}T-{:>3.0f}s{} | BTC {}{:+.1f}bp{} | {} @{:.0f}c | edge={} | {} (q{} ✓{} deg{} flip{} to{})".format(
             engine.DIM, engine.fmt_time(), engine.RST, engine.DIM, time_remaining, engine.RST,
             dc, delta_bps, engine.RST, current_direction, current_entry * 100, edge_str, pend_str,
-            _stats.get("queued", 0), _stats.get("fired_persistent", 0),
-            _stats.get("dropped_degraded", 0), _stats.get("dropped_flipped", 0), _stats.get("dropped_window", 0)))
+            _stats["queued"], _stats["fired_persistent"],
+            _stats["dropped_degraded"], _stats["dropped_flipped"], _stats.get("dropped_timeout", 0)))
         _last_status[0] = now
 
-    # ═══ State machine ═══
+    # ═══ State machine V2 — vol-adaptive direction-stable persistence ═══
     # Case 1: We have a pending signal
     if _pending["active"]:
-        # Check if window changed
+        elapsed = now - _pending["queued_at"]
+        # 1a. Window rolled over → drop
         if state.window_start != _pending["window_start"]:
             _drop_pending("window")
-        # Check if direction flipped (BTC crossed strike)
-        elif current_direction != _pending["direction"]:
+            return
+        # 1b. Direction flipped (BTC crossed strike) → drop immediately
+        if current_direction != _pending["direction"]:
             _drop_pending("flipped")
-        # Check if we've waited long enough
-        elif now - _pending["queued_at"] >= lazy_wait:
-            # Re-check the edge at current state
-            if current_edge is None:
-                _drop_pending("degraded")
-            else:
-                # Allow some degradation: signal persists if still within max_degradation of original
-                # OR still above the absolute min_edge threshold
-                degradation = _pending["original_edge"] - current_edge
-                if degradation > lazy_max_deg or current_edge < min_edge:
-                    _drop_pending("degraded")
+            return
+        # 1c. Hard timeout — opportunity passed
+        if elapsed > max_wait:
+            _stats["dropped_timeout"] += 1
+            _pending["active"] = False
+            return
+        # 1d. Edge collapsed → drop
+        if current_edge is None or current_edge < _pending["original_edge"] * (1.0 - deg_max):
+            _drop_pending("degraded")
+            return
+
+        # 1e. Update stability counter (only advance once per second of wall time)
+        cur_sec = int(now)
+        if cur_sec > _pending["last_tick_sec"]:
+            _pending["last_tick_sec"] = cur_sec
+            # BTC is still on the queued side (we already checked direction match above)
+            _pending["stable_count"] += 1
+
+        # 1f. Fire condition: min_wait elapsed AND enough stable ticks AND edge OK
+        if elapsed >= _pending["min_wait_sec"] and _pending["stable_count"] >= stable_req:
+            combo = state.combos[0]
+            if not combo.has_position_in_window(state.window_start):
+                base_dollars = getattr(engine, 'OR_BASE_DOLLARS', OR_BASE_DOLLARS)
+                if current_edge >= 0.10:
+                    dollars = int(base_dollars * 1.3)
+                elif current_edge >= 0.05:
+                    dollars = base_dollars
                 else:
-                    # FIRE — signal persisted!
-                    combo = state.combos[0]
-                    if not combo.has_position_in_window(state.window_start):
-                        base_dollars = getattr(engine, 'OR_BASE_DOLLARS', OR_BASE_DOLLARS)
-                        if current_edge >= 0.10:
-                            dollars = int(base_dollars * 1.3)
-                        elif current_edge >= 0.05:
-                            dollars = base_dollars
-                        else:
-                            dollars = int(base_dollars * 0.7)
+                    dollars = int(base_dollars * 0.7)
 
-                        # Vol-adjusted sizing
-                        from bot.shared.volatility import vol_tracker as _vt
-                        _sigma = _vt.get_sigma()
-                        if _sigma and _sigma > 0:
-                            vol_mult = min(1.0, 3.0 / _sigma)
-                            dollars = max(25, int(dollars * vol_mult))
+                # Vol-adjusted sizing
+                from bot.shared.volatility import vol_tracker as _vt
+                _sigma = _vt.get_sigma()
+                if _sigma and _sigma > 0:
+                    vol_mult = min(1.0, 3.0 / _sigma)
+                    dollars = max(25, int(dollars * vol_mult))
 
-                        wait_elapsed = now - _pending["queued_at"]
-                        print("  {}[OL] FIRE-PERSISTENT {} edge {:+.0%}->{:+.0%} (held {:.1f}s) @{:.0f}c ${} {} T-{:.0f}s{}".format(
-                            engine.G if current_direction == "YES" else engine.R,
-                            current_direction, _pending["original_edge"], current_edge,
-                            wait_elapsed, current_entry * 100, dollars,
-                            level, time_remaining, engine.RST))
-                        _stats["fired_persistent"] += 1
-                        _last_signal_time[0] = now
-                        _pending["active"] = False
-                        engine.execute_paper_trade(combo, current_direction, abs(delta_bps),
-                                                   time_remaining, current_entry,
-                                                   override_dollars=dollars)
+                print("  {}[OL] FIRE-STABLE {} edge {:+.0%}->{:+.0%} (held {:.1f}s, stable={}, min_wait={:.1f}s) @{:.0f}c ${} {} T-{:.0f}s{}".format(
+                    engine.G if current_direction == "YES" else engine.R,
+                    current_direction, _pending["original_edge"], current_edge,
+                    elapsed, _pending["stable_count"], _pending["min_wait_sec"],
+                    current_entry * 100, dollars, level, time_remaining, engine.RST))
+                _stats["fired_persistent"] += 1
+                _last_signal_time[0] = now
+                _pending["active"] = False
+                engine.execute_paper_trade(combo, current_direction, abs(delta_bps),
+                                           time_remaining, current_entry,
+                                           override_dollars=dollars)
         # Otherwise still waiting — do nothing this tick
         return
 
     # Case 2: No pending signal — check if current setup is queueable
     if current_edge is None or current_edge < min_edge:
         return
+
+    # Compute vol-adaptive min_wait for this signal
+    from bot.shared.volatility import vol_tracker as _vt
+    realized_vol = _vt.get_realized_vol_pct()
+    if realized_vol is not None and realized_vol > 0:
+        min_wait_sec = max(min_wait_floor, min(min_wait_ceil, realized_vol * vol_scale))
+    else:
+        min_wait_sec = min_wait_floor  # fallback when vol tracker has no data yet
 
     # Queue this signal for verification
     _pending["active"] = True
@@ -331,10 +372,14 @@ def check_signals(state, now_s):
     _pending["original_edge"] = current_edge
     _pending["original_entry"] = current_entry
     _pending["window_start"] = state.window_start
+    _pending["min_wait_sec"] = min_wait_sec
+    _pending["stable_count"] = 0
+    _pending["last_tick_sec"] = int(now)
     _stats["queued"] += 1
 
-    print("  {}[OL] QUEUE {} edge={:+.0%} @{:.0f}c — re-checking in {}s{}".format(
-        engine.DIM, current_direction, current_edge, current_entry * 100, lazy_wait, engine.RST))
+    print("  {}[OL] QUEUE {} edge={:+.0%} @{:.0f}c — min_wait={:.1f}s (vol={:.0f}%), need {} stable ticks{}".format(
+        engine.DIM, current_direction, current_edge, current_entry * 100,
+        min_wait_sec, realized_vol or 0, stable_req, engine.RST))
 
 
 def on_window_start(state):
@@ -360,8 +405,13 @@ ARCH_SPEC = {
         "OR_BASE_DOLLARS": OR_BASE_DOLLARS,
         "OR_MAX_TIME": 295,
         "OR_MIN_TIME": 5,
-        "LAZY_WAIT_SEC": LAZY_WAIT_SEC,
-        "LAZY_MAX_DEGRADATION": LAZY_MAX_DEGRADATION,
+        "LAZY_WAIT_SEC": LAZY_WAIT_SEC,  # legacy, no longer used
+        "LAZY_MIN_WAIT_FLOOR_SEC": LAZY_MIN_WAIT_FLOOR_SEC,
+        "LAZY_MIN_WAIT_CEIL_SEC": LAZY_MIN_WAIT_CEIL_SEC,
+        "LAZY_VOL_SCALE": LAZY_VOL_SCALE,
+        "LAZY_STABLE_TICKS": LAZY_STABLE_TICKS,
+        "LAZY_MAX_WAIT_SEC": LAZY_MAX_WAIT_SEC,
+        "LAZY_EDGE_DEGRADATION_MAX": LAZY_EDGE_DEGRADATION_MAX,
         "MIN_ENTRY_PRICE": 0.01, "MAX_ENTRY_PRICE": 0.99,
         "DEAD_ZONE_START": 0, "DEAD_ZONE_END": 0,
         "MIN_SHARES": 1,
