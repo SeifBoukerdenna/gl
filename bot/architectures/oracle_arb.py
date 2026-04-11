@@ -72,6 +72,9 @@ _recent_pnl = deque(maxlen=OA_HALT_LOOKBACK)
 _halt_until = [0.0]
 _daily_pnl_log = deque(maxlen=1000)  # (ts, pnl) tuples
 _last_seen_total = [0]
+# Snapshot of the triggering condition — captured at halt time BEFORE the
+# rolling window is cleared, so the UI can show the actual reason.
+_halt_trigger = {"sum": None, "n": 0, "triggered_at": 0.0, "kind": None}
 
 
 def _load_table():
@@ -239,6 +242,10 @@ def check_signals(state, now_s):
     if today < daily_budget:
         next_midnight = (int(now // 86400) + 1) * 86400
         _halt_until[0] = next_midnight
+        _halt_trigger["sum"] = round(today, 2)
+        _halt_trigger["n"] = sum(1 for ts, _ in _daily_pnl_log if ts >= int(now // 86400) * 86400)
+        _halt_trigger["triggered_at"] = now
+        _halt_trigger["kind"] = "daily_budget"
         print("  {}[OA] DAILY BUDGET HIT  today=${:+.0f} < ${} → halt until UTC midnight{}".format(
             engine.R, today, daily_budget, engine.RST))
         return
@@ -250,6 +257,12 @@ def check_signals(state, now_s):
     if len(_recent_pnl) >= halt_lookback and sum(_recent_pnl) < halt_thresh:
         _halt_until[0] = now + halt_dur_min * 60
         cum = sum(_recent_pnl)
+        # Snapshot the triggering condition BEFORE clearing the window so the
+        # dashboard can display what actually caused the halt (not $0 post-clear).
+        _halt_trigger["sum"] = round(cum, 2)
+        _halt_trigger["n"] = len(_recent_pnl)
+        _halt_trigger["triggered_at"] = now
+        _halt_trigger["kind"] = "rolling_loss"
         print("  {}[OA] HALT TRIGGERED  cum({})=${:+.0f} < ${} → cooldown {}min{}".format(
             engine.R, halt_lookback, cum, halt_thresh, halt_dur_min, engine.RST))
         _recent_pnl.clear()
@@ -342,10 +355,55 @@ def on_window_start(state):
     _last_signal_time[0] = 0.0
 
 
+def get_halt_state():
+    """Expose current halt state to the dashboard via stats.json.
+
+    Returns a dict with halted, halt_until_ts, cooldown_remaining_sec, reason,
+    and context fields so the UI can show why we're stopped and when we come back.
+
+    Note: after a halt triggers, _recent_pnl is cleared, so we expose the
+    snapshot captured at trigger time (_halt_trigger) as the authoritative
+    "what caused this halt" signal."""
+    now = time.time()
+    halt_until = _halt_until[0]
+    if halt_until <= now:
+        return {"halted": False}
+
+    # Use the captured trigger snapshot as the reason if available
+    kind = _halt_trigger.get("kind")
+    if kind:
+        reason = kind
+    else:
+        # Fallback: infer from halt_until relative to next UTC midnight
+        today_start = int(now // 86400) * 86400
+        next_midnight = today_start + 86400
+        reason = "daily_budget" if abs(halt_until - next_midnight) < 120 else "rolling_loss"
+
+    return {
+        "halted": True,
+        "halt_until_ts": halt_until,
+        "cooldown_remaining_sec": int(halt_until - now),
+        "reason": reason,
+        "lookback": OA_HALT_LOOKBACK,
+        "loss_threshold": OA_HALT_LOSS_THRESHOLD,
+        # Trigger snapshot — the rolling sum at the moment halt fired (frozen).
+        # Missing if the halt was set before this tracking existed (e.g. pre-deploy).
+        "trigger_sum": _halt_trigger.get("sum"),
+        "trigger_n": _halt_trigger.get("n", 0),
+        "triggered_at": _halt_trigger.get("triggered_at", 0.0),
+        # Live values — useful post-halt to see how the rolling window is rebuilding
+        "live_recent_pnl_sum": round(sum(_recent_pnl), 2) if _recent_pnl else 0.0,
+        "live_recent_pnl_n": len(_recent_pnl),
+        "today_pnl": round(_today_pnl(), 2),
+        "daily_budget": OA_DAILY_LOSS_BUDGET,
+    }
+
+
 ARCH_SPEC = {
     "name": "oracle_arb",
     "combo_params": COMBO_PARAMS,
     "check_signals": check_signals,
+    "get_halt_state": get_halt_state,
     "extra_globals": {
         "OR_MIN_ENTRY": OR_MIN_ENTRY,
         "OR_MAX_ENTRY": OR_MAX_ENTRY,

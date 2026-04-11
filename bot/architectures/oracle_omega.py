@@ -112,6 +112,8 @@ _halt_until = [0.0]
 _last_seen_total = [0]  # combo.total_trades counter (monotonic, survives the 50-trade cap)
 # Daily budget tracking — list of (ts, pnl) tuples for the rolling 24h window
 _daily_pnl_log = deque(maxlen=500)
+# Snapshot of the triggering condition captured at halt-fire time
+_halt_trigger = {"sum": None, "n": 0, "triggered_at": 0.0, "kind": None}
 
 # Stats
 _stats = {
@@ -310,6 +312,10 @@ def check_signals(state, now_s):
         # Halt until next UTC midnight
         next_midnight = (int(now // 86400) + 1) * 86400
         _halt_until[0] = next_midnight
+        _halt_trigger["sum"] = round(today, 2)
+        _halt_trigger["n"] = sum(1 for ts, _ in _daily_pnl_log if ts >= int(now // 86400) * 86400)
+        _halt_trigger["triggered_at"] = now
+        _halt_trigger["kind"] = "daily_budget"
         _stats["blocked_halt"] += 1
         print("  {}[OMG] DAILY BUDGET HIT  today=${:+.0f} < ${} → halt until UTC midnight{}".format(
             engine.R, today, daily_budget, engine.RST))
@@ -322,6 +328,11 @@ def check_signals(state, now_s):
     if len(_recent_pnl) >= halt_lookback and sum(_recent_pnl) < halt_thresh:
         _halt_until[0] = now + halt_dur_min * 60
         cum = sum(_recent_pnl)
+        # Snapshot the triggering condition BEFORE clearing the rolling window
+        _halt_trigger["sum"] = round(cum, 2)
+        _halt_trigger["n"] = len(_recent_pnl)
+        _halt_trigger["triggered_at"] = now
+        _halt_trigger["kind"] = "rolling_loss"
         _stats["halts_triggered"] += 1
         _stats["blocked_halt"] += 1
         print("  {}[OMG] HALT TRIGGERED  cum({})=${:+.0f} < ${} → cooldown {}min{}".format(
@@ -440,10 +451,41 @@ def on_window_start(state):
     _last_signal_time[0] = 0.0
 
 
+def get_halt_state():
+    """Expose current halt state to the dashboard via stats.json."""
+    now = time.time()
+    halt_until = _halt_until[0]
+    if halt_until <= now:
+        return {"halted": False}
+    kind = _halt_trigger.get("kind")
+    if kind:
+        reason = kind
+    else:
+        today_start = int(now // 86400) * 86400
+        next_midnight = today_start + 86400
+        reason = "daily_budget" if abs(halt_until - next_midnight) < 120 else "rolling_loss"
+    return {
+        "halted": True,
+        "halt_until_ts": halt_until,
+        "cooldown_remaining_sec": int(halt_until - now),
+        "reason": reason,
+        "lookback": OMEGA_HALT_LOOKBACK,
+        "loss_threshold": OMEGA_HALT_LOSS_THRESHOLD,
+        "trigger_sum": _halt_trigger.get("sum"),
+        "trigger_n": _halt_trigger.get("n", 0),
+        "triggered_at": _halt_trigger.get("triggered_at", 0.0),
+        "live_recent_pnl_sum": round(sum(_recent_pnl), 2) if _recent_pnl else 0.0,
+        "live_recent_pnl_n": len(_recent_pnl),
+        "today_pnl": round(_today_pnl(), 2),
+        "daily_budget": OMEGA_DAILY_LOSS_BUDGET,
+    }
+
+
 ARCH_SPEC = {
     "name": "oracle_omega",
     "combo_params": COMBO_PARAMS,
     "check_signals": check_signals,
+    "get_halt_state": get_halt_state,
     "extra_globals": {
         "OR_PHASE1_END": OR_PHASE1_END,
         "OR_PHASE1_MIN_EDGE": OR_PHASE1_MIN_EDGE,

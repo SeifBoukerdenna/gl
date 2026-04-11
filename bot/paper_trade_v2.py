@@ -1131,6 +1131,19 @@ def write_session_stats():
             "window_start": ws, "outcome": w.get("outcome"),
         })
 
+    # Query architecture-specific halt state if it exposes one.
+    # Architectures implement ARCH_SPEC["get_halt_state"] to return a dict like
+    # {"halted": bool, "halt_until_ts": float, "cooldown_remaining_sec": int,
+    #  "reason": str, ...context...}. The dashboard reads this to show halt badges.
+    halt_state = {"halted": False}
+    if _ARCH_SPEC:
+        _get_halt = _ARCH_SPEC.get("get_halt_state")
+        if _get_halt:
+            try:
+                halt_state = _get_halt() or {"halted": False}
+            except Exception:
+                halt_state = {"halted": False}
+
     stats = {
         "instance": INSTANCE,
         "architecture": ARCHITECTURE,
@@ -1153,6 +1166,7 @@ def write_session_stats():
         "book_spread": state.book.spread,
         "book_source": state.book.source,
         "cooldown_active": time.time() < state.cooldown_until,
+        "halt_state": halt_state,
         "errors": state.errors,
         "combos": combos,
         "recent_trades": recent,

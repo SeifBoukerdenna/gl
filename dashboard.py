@@ -613,12 +613,30 @@ def get_all_sessions(since_ts=None):
             # Get architecture from stats.json cache, local stats.json, or config
             arch = _get_session_architecture(name)
 
+            # Pull halt_state from stats.json if the architecture publishes one
+            halt_state = None
+            stats_path = DATA_DIR / name / "stats.json"
+            if stats_path.exists():
+                try:
+                    _sj = json.loads(stats_path.read_text())
+                    halt_state = _sj.get("halt_state")
+                    # Stats.json is written ~every 60s; recompute cooldown_remaining_sec live
+                    # so the UI countdown is accurate.
+                    if halt_state and halt_state.get("halted") and halt_state.get("halt_until_ts"):
+                        remaining = int(halt_state["halt_until_ts"] - time.time())
+                        halt_state["cooldown_remaining_sec"] = max(0, remaining)
+                        if remaining <= 0:
+                            halt_state = {"halted": False, "_just_released": True}
+                except Exception:
+                    pass
+
             sessions.append({
                 "name": name, "where": where, "status": status,
                 "architecture": arch,
                 "trades": csv_stats["trades"], "wins": csv_stats["wins"],
                 "wr": csv_stats["wr"], "pnl_taker": csv_stats["pnl_taker"],
                 "viability": csv_stats.get("viability"),
+                "halt_state": halt_state,
             })
             seen.add(name)
 
@@ -1103,6 +1121,12 @@ th:first-child{border-radius:6px 0 0 0}th:last-child{border-radius:0 6px 0 0}
 .session-table .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:4px}
 .session-table .live-dot.on{background:var(--green);box-shadow:0 0 6px rgba(16,185,129,.5)}
 .session-table .live-dot.off{background:var(--dim2)}
+.session-table .halt-badge{display:inline-block;margin-left:8px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:.4px;background:#f59e0b22;color:#fbbf24;border:1px solid #f59e0b;vertical-align:middle;cursor:help;white-space:nowrap}
+.session-table tbody tr.halted{background:linear-gradient(90deg,rgba(245,158,11,0.08) 0%,rgba(245,158,11,0.02) 100%)}
+.session-table tbody tr.halted td:first-child{border-left:3px solid #f59e0b!important}
+.session-table tbody tr.halted .session-name{color:#fbbf24}
+@keyframes haltPulse{0%,100%{opacity:1}50%{opacity:0.55}}
+.session-table .halt-badge{animation:haltPulse 2s ease-in-out infinite}
 
 /* Compact stat header (4 boxes) */
 .compact-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
@@ -1799,9 +1823,50 @@ function renderOverview(el) {
             const dtrades = ovDeltaBadge('row_trades_'+s.name, s.trades||0, null, dv => '+'+dv);
             const dwr = ovDeltaBadge('row_wr_'+s.name, w, null, dv => (dv>=0?'+':'')+dv.toFixed(1)+'pp');
 
-            tableRows += `<tr class="tier-${tier}" onclick="navigate('session','${s.name}')">
+            // Halt badge (rendered inline next to session name when halted)
+            const haltInfo = s.halt_state || {};
+            const isHalted = haltInfo.halted === true;
+            let haltBadge = '';
+            let rowExtraClass = '';
+            let haltTooltip = '';
+            if (isHalted) {
+                rowExtraClass = ' halted';
+                const rem = haltInfo.cooldown_remaining_sec || 0;
+                const mm = Math.floor(rem/60), ss = rem%60;
+                const countdown = (mm>0?mm+'m ':'') + ss + 's';
+                const reason = haltInfo.reason === 'daily_budget' ? 'DAILY BUDGET' : 'ROLLING LOSS';
+                // Use the frozen trigger snapshot (captured at halt-fire time),
+                // NOT the live rolling window which is cleared post-trigger.
+                const triggerSum = haltInfo.trigger_sum;
+                const triggerN = haltInfo.trigger_n;
+                const threshold = haltInfo.loss_threshold;
+                const lookback = haltInfo.lookback;
+                const budget = haltInfo.daily_budget;
+                const untilTs = haltInfo.halt_until_ts;
+                const untilDate = untilTs ? new Date(untilTs*1000) : null;
+                const untilStr = untilDate ? untilDate.toISOString().substr(11,8)+' UTC' : '?';
+                let tip = `HALTED — ${reason}\n`;
+                if (haltInfo.reason === 'rolling_loss') {
+                    if (triggerSum != null && threshold != null) {
+                        tip += `Last ${triggerN||lookback} trades summed $${Math.round(triggerSum)} (< $${threshold} threshold) when halt triggered\n`;
+                    } else {
+                        tip += `Rolling-loss halt active (pre-deploy — trigger snapshot unavailable)\n`;
+                    }
+                } else if (haltInfo.reason === 'daily_budget') {
+                    if (triggerSum != null && budget != null) {
+                        tip += `Today's PnL $${Math.round(triggerSum)} hit daily budget of $${budget}\n`;
+                    } else {
+                        tip += `Daily-budget halt active — halted until UTC midnight\n`;
+                    }
+                }
+                tip += `Resumes at ${untilStr} (${countdown} remaining)`;
+                haltTooltip = tip.replace(/"/g,'&quot;');
+                haltBadge = `<span class="halt-badge" data-halt-until="${untilTs||0}" title="${haltTooltip}">⏸ HALT ${countdown}</span>`;
+            }
+
+            tableRows += `<tr class="tier-${tier}${rowExtraClass}" onclick="navigate('session','${s.name}')">
               <td>
-                <div class="session-name">${s.name} <span class="live-dot ${active?'on':'off'}"></span></div>
+                <div class="session-name">${s.name} <span class="live-dot ${active?'on':'off'}"></span>${haltBadge}</div>
                 <div class="session-arch">${archShort}</div>
               </td>
               <td><span class="v-badge ${verdict}">${vLabel}</span></td>
@@ -2420,6 +2485,55 @@ function renderSession(el) {
     const active=meta.status==='running'||meta.status==='active';
     const avgPnl=csvTrades>0?(csvPnl/csvTrades):0;
 
+    // Halt state (prefer live SSE data for freshest cooldown, fall back to meta)
+    const haltInfo = (d && d.halt_state) || meta.halt_state || {};
+    const isHalted = haltInfo.halted === true;
+    let haltBanner = '';
+    if (isHalted) {
+        // Recompute remaining live if we have an absolute halt_until_ts
+        let rem = haltInfo.cooldown_remaining_sec || 0;
+        if (haltInfo.halt_until_ts) {
+            rem = Math.max(0, Math.floor(haltInfo.halt_until_ts - Date.now()/1000));
+        }
+        const mm = Math.floor(rem/60), ss = rem%60;
+        const countdown = (mm>0?mm+'m ':'') + ss + 's';
+        const reasonStr = haltInfo.reason === 'daily_budget' ? 'DAILY BUDGET' : 'ROLLING LOSS';
+        const threshold = haltInfo.loss_threshold;
+        const lookback = haltInfo.lookback;
+        const triggerSum = haltInfo.trigger_sum;
+        const triggerN = haltInfo.trigger_n;
+        const budget = haltInfo.daily_budget;
+        const untilTs = haltInfo.halt_until_ts;
+        const untilDate = untilTs ? new Date(untilTs*1000) : null;
+        const untilStr = untilDate ? untilDate.toISOString().substr(11,8)+' UTC' : '?';
+        let detail = '';
+        if (haltInfo.reason === 'rolling_loss') {
+            if (triggerSum != null && threshold != null) {
+                detail = `Last ${triggerN||lookback} trades summed <b>$${Math.round(triggerSum)}</b> (threshold: <b>$${threshold}</b>) when halt triggered`;
+            } else {
+                detail = `Rolling-loss halt active (pre-deploy — trigger snapshot unavailable)`;
+            }
+        } else if (haltInfo.reason === 'daily_budget') {
+            if (triggerSum != null && budget != null) {
+                detail = `Today's PnL <b>$${Math.round(triggerSum)}</b> hit daily budget of <b>$${budget}</b>`;
+            } else {
+                detail = `Daily-budget halt active — resumes at UTC midnight`;
+            }
+        }
+        haltBanner = `
+        <div class="halt-banner" style="background:linear-gradient(90deg,rgba(245,158,11,0.18) 0%,rgba(245,158,11,0.06) 100%);border:1px solid #f59e0b;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:16px">
+          <div style="font-size:22px">⏸</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:#fbbf24;letter-spacing:.5px;margin-bottom:4px">HALTED — ${reasonStr}</div>
+            <div style="font-size:11px;color:var(--dim);line-height:1.5">${detail}</div>
+          </div>
+          <div style="text-align:right;min-width:130px">
+            <div class="halt-banner-countdown" data-halt-until="${untilTs||0}" style="font-size:20px;font-weight:700;color:#fbbf24;font-variant-numeric:tabular-nums">${countdown}</div>
+            <div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-top:2px">resumes ${untilStr}</div>
+          </div>
+        </div>`;
+    }
+
     // Viability section (from S.sessions metadata)
     const v = (meta.viability)||{};
     const verdict = v.viability || 'insufficient_data';
@@ -2489,6 +2603,7 @@ function renderSession(el) {
       <div class="stat-box"><div class="stat-label">Trades</div><div class="stat-value b">${csvTrades}</div></div>
       <div class="stat-box"><div class="stat-label">Windows</div><div class="stat-value cy">${d.windows_settled||0}</div></div>
     </div>
+    ${haltBanner}
     ${viabilityHtml}
     ${(()=>{
       // PnL trend chart for the selected period (60-min buckets, or 15-min if <12h)
@@ -3181,6 +3296,37 @@ function tickTimer(){
             if(progEl){progEl.style.width=pct+'%';progEl.style.background=trem<60?'var(--red)':trem<120?'var(--yellow)':'var(--blue)'}
         }
     }
+
+    // Update all halt-badge countdowns in-place so the UI ticks every second
+    // without requiring a full overview re-render.
+    document.querySelectorAll('.halt-badge[data-halt-until]').forEach(el => {
+        const untilTs = parseFloat(el.dataset.haltUntil || '0');
+        if(!untilTs) return;
+        const nowSec = Date.now()/1000;
+        const rem = Math.max(0, Math.floor(untilTs - nowSec));
+        if(rem <= 0){
+            el.textContent = '⏸ HALT ended';
+            el.style.opacity = '0.5';
+            return;
+        }
+        const mm = Math.floor(rem/60), ss = rem%60;
+        const countdown = (mm>0?mm+'m ':'') + ss + 's';
+        el.textContent = '⏸ HALT ' + countdown;
+    });
+    // Detail-page halt banner countdown
+    document.querySelectorAll('.halt-banner-countdown[data-halt-until]').forEach(el => {
+        const untilTs = parseFloat(el.dataset.haltUntil || '0');
+        if(!untilTs) return;
+        const nowSec = Date.now()/1000;
+        const rem = Math.max(0, Math.floor(untilTs - nowSec));
+        if(rem <= 0){
+            el.textContent = 'ENDED';
+            el.style.opacity = '0.6';
+            return;
+        }
+        const mm = Math.floor(rem/60), ss = rem%60;
+        el.textContent = (mm>0?mm+'m ':'') + ss + 's';
+    });
 }
 
 function updateGlobalBanner(d){
@@ -3374,18 +3520,29 @@ function _updateOverviewFromSSE(){
     // Filter out stopped sessions by default — only show active ones
     if(S._showStopped === undefined) S._showStopped = false;
 
-    const allSessions = Object.entries(_sseVpsCache).map(([name, d]) => ({
-        name, where: d._name ? 'vps' : 'local',
-        status: d.updated && (Date.now()/1000 - d.updated) < 120 ? 'active' : 'stopped',
-        architecture: d.architecture || 'impulse_lag',
-        trades: d.trades || 0, wins: d.wins || 0,
-        wr: d.wr ? Number(d.wr) : 0,
-        pnl_taker: Math.round(d.pnl_taker || 0),
-        windows_settled: d.windows_settled || 0,
-        updated: d.updated || 0,
-        started: d.started || 0,
-        viability: d.viability || null,
-    }));
+    const allSessions = Object.entries(_sseVpsCache).map(([name, d]) => {
+        // If the VPS pushed a halt_state, recompute cooldown_remaining_sec live
+        // so the badge countdown is accurate between SSE refreshes.
+        let halt = d.halt_state || null;
+        if(halt && halt.halted && halt.halt_until_ts) {
+            const rem = Math.max(0, Math.floor(halt.halt_until_ts - Date.now()/1000));
+            halt = Object.assign({}, halt, { cooldown_remaining_sec: rem });
+            if(rem <= 0) halt = { halted: false };
+        }
+        return {
+            name, where: d._name ? 'vps' : 'local',
+            status: d.updated && (Date.now()/1000 - d.updated) < 120 ? 'active' : 'stopped',
+            architecture: d.architecture || 'impulse_lag',
+            trades: d.trades || 0, wins: d.wins || 0,
+            wr: d.wr ? Number(d.wr) : 0,
+            pnl_taker: Math.round(d.pnl_taker || 0),
+            windows_settled: d.windows_settled || 0,
+            updated: d.updated || 0,
+            started: d.started || 0,
+            viability: d.viability || null,
+            halt_state: halt,
+        };
+    });
 
     // Track total for the indicator
     S._totalSessionCount = allSessions.length;
